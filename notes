@@ -1,0 +1,89 @@
+Sun Jan 29 21:32:27 UTC 2012
+
+CLI commands are a tree
+
+Nodes are added/removed on the fly
+
+Pagination ?
+
+Prefixes are exclusive:
+	show
+	help
+	enable
+	disable
+	no
+	del
+	etc.
+
+Suffix '?' == help prefix
+
+Instances
+	by name/number
+	subject to approval
+
+Types:
+	WORD
+	STRING
+	INT
+	UINT
+	REAL
+	ENUM { word ... }
+
+API:
+	struct clik * Cfk_New(void);
+	int Cfk_Destroy(struct clik *);
+	int Cfk_ErrorHandling(?);
+
+	int Cfk_Add_Pfx(struct clik *, const char *pfx, unsigned val);
+	int Cfk_Del_Pfx(struct clik *, const char *pfx);
+
+	int Cfk_Add_Tree(struct clik *, struct cfgtree *);
+	int Cfk_Del_Tree(struct clik *, struct cfgtree *);
+
+	struct clik * Cfk_New_Context(struct clik *);
+	int Cfk_Del_Context(struct clik *);
+	XXX: output handler
+	XXX: input handler
+
+Tree BNF:
+	tree:
+		leaf
+		| tree leaf
+	
+	leaf:
+		instance
+		| word
+
+	instance:
+		"INSTANCE" name type '{' ispec tree '}'
+
+	ispec:
+		'desc' STRING
+		'func' name
+
+	word:
+		"WORD" name type* '{' wspec '}'
+
+	wspec:
+		'desc' STRING
+		'func' name
+		'default' '{' type_val ... '}'
+
+Instance function:
+	int ifunc(struct cfgctx *, unsigned pfx, TYPE i, void **priv);
+		"new", "del" etc are prefixes	
+		if *priv != NULL, instance exists
+		if *priv == NULL, instance does not exist
+
+Word function:
+	int wfunc(struct cfgctx *, unsigned pfx, void *priv, TYPE ...);
+
+Implementation:
+
+	Python script: CLIkit
+
+		CLIkit --code clikit
+			Emit the central code to clikit.[ch]
+		CLIkit --tree foo.clikit
+			compile foo.clikit to foo.c and foo.h
+
