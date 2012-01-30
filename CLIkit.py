@@ -103,11 +103,11 @@ int CLIkit_Destroy(struct clikit *);
 /* Cfk_ErrorHandling() */
 
 int CLIkit_Add_Prefix(struct clikit *, const char *pfx, unsigned val);
-int CLIkit_Del_Prefix(struct clikit *, const char *pfx);
+int CLIkit_Del_Prefix(const struct clikit *, const char *pfx);
 
 int CLIkit_Add_Tree(struct clikit *, const struct clikit_tree *,
     const char *root);
-int CLIkit_Del_Tree(struct clikit *, const struct clikit_tree *,
+int CLIkit_Del_Tree(const struct clikit *, const struct clikit_tree *,
     const char *root);
 
 struct clikit_context *CLIkit_New_Context(struct clikit *);
@@ -153,9 +153,6 @@ struct name {								\
 	struct type *lh_first;	/* first element */			\
 }
 
-#define	LIST_HEAD_INITIALIZER(head)					\
-	{ NULL }
-
 #define	LIST_ENTRY(type)						\
 struct {								\
 	struct type *le_next;	/* next element */			\
@@ -165,8 +162,6 @@ struct {								\
 /*
  * List functions.
  */
-
-#define	LIST_EMPTY(head)	((head)->lh_first == NULL)
 
 #define	LIST_FIRST(head)	((head)->lh_first)
 
@@ -184,21 +179,6 @@ struct {								\
 	LIST_FIRST((head)) = NULL;					\
 } while (0)
 
-#define	LIST_INSERT_AFTER(listelm, elm, field) do {			\
-	if ((LIST_NEXT((elm), field) = LIST_NEXT((listelm), field)) != NULL)\
-		LIST_NEXT((listelm), field)->field.le_prev =		\
-		    &LIST_NEXT((elm), field);				\
-	LIST_NEXT((listelm), field) = (elm);				\
-	(elm)->field.le_prev = &LIST_NEXT((listelm), field);		\
-} while (0)
-
-#define	LIST_INSERT_BEFORE(listelm, elm, field) do {			\
-	(elm)->field.le_prev = (listelm)->field.le_prev;		\
-	LIST_NEXT((elm), field) = (listelm);				\
-	*(listelm)->field.le_prev = (elm);				\
-	(listelm)->field.le_prev = &LIST_NEXT((elm), field);		\
-} while (0)
-
 #define	LIST_INSERT_HEAD(head, elm, field) do {				\
 	if ((LIST_NEXT((elm), field) = LIST_FIRST((head))) != NULL)	\
 		LIST_FIRST((head))->field.le_prev = &LIST_NEXT((elm), field);\
@@ -213,16 +193,6 @@ struct {								\
 		LIST_NEXT((elm), field)->field.le_prev = 		\
 		    (elm)->field.le_prev;				\
 	*(elm)->field.le_prev = LIST_NEXT((elm), field);		\
-} while (0)
-
-#define LIST_SWAP(head1, head2, type, field) do {			\
-	struct type *swap_tmp = LIST_FIRST((head1));			\
-	LIST_FIRST((head1)) = LIST_FIRST((head2));			\
-	LIST_FIRST((head2)) = swap_tmp;					\
-	if ((swap_tmp = LIST_FIRST((head1))) != NULL)			\
-		swap_tmp->field.le_prev = &LIST_FIRST((head1));		\
-	if ((swap_tmp = LIST_FIRST((head2))) != NULL)			\
-		swap_tmp->field.le_prev = &LIST_FIRST((head2));		\
 } while (0)
 
 /*********************************************************************/
@@ -257,6 +227,7 @@ struct clikit_prefix {
 struct clikit_context {
 	unsigned			magic;
 #define CLIKIT_CONTEXT_MAGIC		0xa70f836a
+	struct clikit			*ck;
 	LIST_ENTRY(clikit_context)	list;
 };
 
@@ -338,7 +309,7 @@ CLIkit_Add_Prefix(struct clikit *ck, const char *pfx, unsigned val)
 }
 
 int
-CLIkit_Del_Prefix(struct clikit *ck, const char *pfx)
+CLIkit_Del_Prefix(const struct clikit *ck, const char *pfx)
 {
 	struct clikit_prefix *cp;
 	
@@ -375,6 +346,7 @@ CLIkit_Add_Tree(struct clikit *ck, const struct clikit_tree *tree,
 		return (-1);
 	cb->magic = CLIKIT_BRANCH_MAGIC;
 	cb->root = strdup(root);
+	cb->tree = tree;
 	if (cb->root == NULL) {
 		free(cb);
 		return (-1);
@@ -384,7 +356,7 @@ CLIkit_Add_Tree(struct clikit *ck, const struct clikit_tree *tree,
 }
 
 int
-CLIkit_Del_Tree(struct clikit *ck, const struct clikit_tree *tree,
+CLIkit_Del_Tree(const struct clikit *ck, const struct clikit_tree *tree,
     const char *root)
 {
 	struct clikit_branch *cb;
@@ -400,6 +372,38 @@ CLIkit_Del_Tree(struct clikit *ck, const struct clikit_tree *tree,
 		}
 	}
 	return (-1);
+}
+
+/*********************************************************************/
+
+struct clikit_context *
+CLIkit_New_Context(struct clikit *ck)
+{
+	struct clikit_context *cc;
+
+	assert(ck != NULL && ck->magic == CLIKIT_MAGIC);
+
+	cc = calloc(1L, sizeof *cc);
+	if (cc == NULL)
+		return (NULL);
+	cc->magic = CLIKIT_CONTEXT_MAGIC;
+	cc->ck = ck;
+	LIST_INSERT_HEAD(&ck->contexts, cc, list);
+	return (cc);
+}
+
+int
+CLIkit_Destroy_Context(struct clikit_context *cc)
+{
+	struct clikit *ck;
+	
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	ck = cc->ck;
+	assert(ck != NULL && ck->magic == CLIKIT_MAGIC);
+	LIST_REMOVE(cc, list);
+	(void)memset(cc, 0, sizeof *cc);
+	free(cc);
+	return (0);
 }
 
 """)

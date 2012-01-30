@@ -1,0 +1,4 @@
+*.o
+clikit.c
+clikit.h
+a.out

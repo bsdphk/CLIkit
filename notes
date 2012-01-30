@@ -1,3 +1,12 @@
+Mon Jan 30 18:53:16 UTC 2012
+
+<< foo
+...
+foo
+
+types like REAL optional
+
+
 Sun Jan 29 21:32:27 UTC 2012
 
 CLI commands are a tree
@@ -82,8 +91,10 @@ Implementation:
 
 	Python script: CLIkit
 
-		CLIkit --code clikit
+		CLIkit --code -o clikit [opts]
 			Emit the central code to clikit.[ch]
-		CLIkit --tree foo.clikit
+			opts:
+				--threaded
+		CLIkit --tree foo.clikit [opts]
 			compile foo.clikit to foo.c and foo.h
 
