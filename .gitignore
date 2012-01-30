@@ -1,4 +1,6 @@
 *.o
 clikit.c
 clikit.h
+test.c
+test.h
 a.out
