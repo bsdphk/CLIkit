@@ -24,6 +24,20 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 #
+# This is a slightly weird Python program:  It writes C-code.
+#
+# It can be run in two modes:
+#
+# With the argument "--tree" it will parse a CLI-langauge specification
+# and write out a .h and .c file with code to implement that CLI structure.
+#
+# With the argument "--code" it will write out a .h and .c file that provides
+# the infrastructure code necessary for the --tree generated code.
+#
+# The reason for this split is that you might have multiple invocations
+# with --tree in a software project, for instance once for each loadable
+# module etc.
+#
 
 from __future__ import print_function
 

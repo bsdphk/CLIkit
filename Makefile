@@ -15,3 +15,9 @@ all:
 	cc -g -o a.out main.o clikit.o test.o
 	./a.out
 	flexelint -I. clikit.c main.c test.c
+
+clean:
+	rm -f clikit.[ch]
+	rm -f test.[ch]
+	rm -f *.o
+	rm -f a.out
