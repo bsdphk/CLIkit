@@ -28,6 +28,7 @@
 from __future__ import print_function
 
 import sys
+import os
 
 #######################################################################
 #
@@ -409,12 +410,110 @@ CLIkit_Destroy_Context(struct clikit_context *cc)
 """)
 
 #######################################################################
+#######################################################################
+#
+
+import shlex
+
+def syntax(foo):
+	sys.stderr.write("Syntax Error:\n\t" + foo + "\n")
+	exit(2)
+
+def keyval(kv, tl):
+	assert len(tl) > 0
+	if not tl[0] in kv:
+		return False
+	i = tl.pop(0)
+	if kv[i] != None:
+		syntax("Double '%s' in LEAF(%s)" %
+		    (i, nm))
+	if len(tl) == 0:
+		syntax("Missing value '%s' in LEAF(%s)" %
+		    (i, nm))
+	kv[i] = tl.pop(0)
+	return True
+
+def parse_leaf(tl):
+	assert tl[0] == "LEAF"
+	tl.pop(0)
+	nm = tl.pop(0)
+	al = list()
+	while len(tl) > 0 and tl[0] != "{":
+		al.append(tl.pop(0))
+	if len(tl) == 0:
+		syntax("Missing '{' in LEAF(%s)" % nm)
+	assert tl.pop(0) == "{"
+	kv = {
+		"desc":	None,
+		"func": None
+	}
+	while len(tl) > 0 and tl[0] != "}":
+		if keyval(kv, tl):
+			continue
+		else:
+			syntax("Unknown '%s' in LEAF(%s)" % (tl[0], nm))
+	if len(tl) == 0:
+		syntax("Missing '}' in LEAF(%s)" % nm)
+	assert tl.pop(0) == "}"
+	print("Leaf(%s)" % nm, al, kv)
+
+def parse_instance(tl):				
+	assert tl[0] == "INSTANCE"
+	tl.pop(0)
+	nm = tl.pop(0)
+	al = list()
+	while len(tl) > 0 and tl[0] != "{":
+		al.append(tl.pop(0))
+	if len(tl) == 0:
+		syntax("Missing '{' in INSTANCE(%s)" % nm)
+	assert tl.pop(0) == "{"
+	kv = {
+		"desc":	None,
+		"func": None
+	}
+	while len(tl) > 0 and tl[0] != "}":
+		if keyval(kv, tl):
+			continue
+		elif tl[0] == "LEAF":
+			parse_leaf(tl)
+		elif tl[0] == "INSTANCE":
+			parse_instance(tl)
+		else:
+			syntax("Unknown '%s' in INSTANCE(%s)" % (tl[0], nm))
+	if len(tl) == 0:
+		syntax("Missing '}' in LEAF(%s)" % nm)
+	assert tl.pop(0) == "}"
+	print("Instance(%s)" % nm, al, kv)
+		
+
+def parse(fname):
+	fi = open(fname, "r")
+	pt = fi.read()
+	fi.close()
+	tl = shlex.split(pt, "#")
+	while len(tl):
+		i = tl[0]
+		if i == "LEAF":
+			parse_leaf(tl)
+		elif i == "INSTANCE":
+			parse_instance(tl)
+		else:
+			syntax("Unknown '%s' at top" % tl[0])
+
+#######################################################################
 #
 
 def do_tree(argv):
 	print("DO_TREE", argv)
-	usage("XXX: not yet implemented")
+	if len(argv) != 1:
+		usage("XXX: options not yet implemented")
+	fname = os.path.splitext(argv[0])
+	parse(argv[0])
+	print(fname)
 
+	exit(2)
+
+#######################################################################
 #######################################################################
 #
 

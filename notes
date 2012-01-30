@@ -64,7 +64,7 @@ Tree BNF:
 		| word
 
 	instance:
-		"INSTANCE" name type '{' ispec tree '}'
+		"BRANCH" name type '{' ispec tree '}'
 
 	ispec:
 		'desc' STRING
