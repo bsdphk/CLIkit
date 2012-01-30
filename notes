@@ -1,5 +1,50 @@
 Mon Jan 30 18:53:16 UTC 2012
 
+	static int
+	match_foo(struct clikit_context *cc)
+	{
+		if (strcmp(cc->ap, "foo"))
+			return (0);
+		cc->ap++;
+		if (cc->ap != NULL) {
+			clikit_error("junk at end of line");
+			return (-1);
+		} 
+		do_foo(cc);
+		return (0);
+	}
+
+	static int
+	match_things(struct clikit_context *cc)
+	{
+		unsigned id;
+		int retval;
+
+		if (strcmp(cc->ap, "things"))
+			return (0);
+		cc->ap++;
+		if (clikit_getuint(cc, &id))
+			return (-1);
+		clikit_push_instance(cc);
+		if (things_instance(cc, id)) 
+			retval = -1;
+		else if (cc->ap == NULL)
+			retval = 0;
+		if (!match_things_this(cc))
+			retval = 0;
+		else if (!match_things_that(cc))
+			retval = 0;
+		else if (!match_things_junk(cc))
+			retval = 0;
+		else {
+			clikit_error("unknown '%s'", cp->ap);
+			retval = -1;
+		}
+		clikit_pop_instance(cc);
+	}
+
+Mon Jan 30 18:53:16 UTC 2012
+
 << foo
 ...
 foo

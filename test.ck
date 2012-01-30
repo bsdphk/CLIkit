@@ -4,6 +4,7 @@ LEAF foo {
 	# Comment2
 	desc	"FOO is not bar"
 	func	do_foo			# Comment3
+	name	match_foo
 }
 
 LEAF bar {
@@ -15,11 +16,11 @@ INSTANCE things UINT {
 	desc	"THINGS"
 	func	things_instance
 
-	LEAF this UNIT {
+	LEAF this UINT {
 		desc "things this"
 		func do_things_this
 	}
-	LEAF that WORD {
+	LEAF that WORD INT {
 		desc "things that"
 		func do_things_that
 	}
