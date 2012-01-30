@@ -139,6 +139,7 @@ int CLIkit_Del_Tree(const struct clikit *, clikit_match_f *func,
 
 struct clikit_context *CLIkit_New_Context(struct clikit *);
 int CLIkit_Destroy_Context(struct clikit_context *);
+void CLIkit_Input(struct clikit_context *, const char *);
 /* output handler */
 /* input handler */
 
@@ -269,6 +270,16 @@ struct clikit_context {
 #define CLIKIT_CONTEXT_MAGIC		0xa70f836a
 	struct clikit			*ck;
 	LIST_ENTRY(clikit_context)	list;
+	char				*b;
+	char				*e;
+	char				*p;
+	enum {
+		sIdle,
+		sComment,
+		sWord,
+		sQuoted,
+		sBackslash
+	}				st;
 };
 
 /*********************************************************************/
@@ -439,7 +450,16 @@ CLIkit_New_Context(struct clikit *ck)
 		return (NULL);
 	cc->magic = CLIKIT_CONTEXT_MAGIC;
 	cc->ck = ck;
+	cc->b = malloc(64L);
+	if (cc->b == NULL) {
+		free(cc);
+		return (NULL);
+	}
+	cc->e = cc->b + 64;
+	cc->p = cc->b;
+	cc->st = sIdle;
 	LIST_INSERT_HEAD(&ck->contexts, cc, list);
+
 	return (cc);
 }
 
@@ -455,6 +475,133 @@ CLIkit_Destroy_Context(struct clikit_context *cc)
 	(void)memset(cc, 0, sizeof *cc);
 	free(cc);
 	return (0);
+}
+
+/*********************************************************************/
+
+#include <ctype.h>		/* XXX */
+#include <stdio.h>		/* XXX */
+/*lint -esym(534,printf) */
+
+static void
+clikit_add_char(struct clikit_context *cc, int ch)
+{
+	int l;
+	char *p;
+
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	assert(cc->b < cc->e);
+	assert(cc->p >= cc->b);
+	assert(cc->p <= cc->e);
+
+	if (cc->p == cc->e) {
+		l = cc->e - cc->b;
+		if (l > 4096L)
+			l += 4096L;
+		else
+			l += l;
+		p = realloc(cc->b, (size_t)l);
+		/* XXX: p */
+		assert(p != NULL);
+		cc->p = p + (cc->p - cc->b);
+		cc->b = p;
+		cc->e = p + l;
+	}
+	assert(cc->p >= cc->b);
+	assert(cc->p < cc->e);
+	*cc->p = (char)ch;
+	cc->p++;
+}
+
+static void
+clikit_complete(struct clikit_context *cc)
+{
+	char *p;
+
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	clikit_add_char(cc, 0);
+	printf("\\nZZ: %ld\\n", (cc->p - cc->b));
+	
+	for (p = cc->b; p < cc->p; p += strlen(p) + 1)
+		printf("\\t{%s}\\n", p);
+
+	cc->p = cc->b;
+	cc->st = sIdle;
+}
+
+static void
+clikit_in_char(struct clikit_context *cc, int ch)
+{
+
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	if (ch >= ' ' && ch <= '~')
+		printf("%d, %c\\t", cc->st, ch);
+	else
+		printf("%d, 0x%02x\\t", cc->st, ch);
+
+	switch(cc->st) {
+	case sIdle:
+		if (ch == '#')
+			cc->st = sComment;
+		else if (isspace(ch)) {
+			cc->st = sIdle;
+		} else if (ch == '"')
+			cc->st = sQuoted;
+		else {
+			cc->st = sWord;
+			clikit_add_char(cc, ch);
+		}
+		break;
+	case sWord:
+		if (isspace(ch)) {
+			clikit_add_char(cc, 0);
+			cc->st = sIdle;
+			if (!isblank(ch))
+				clikit_complete(cc);
+		} else {
+			clikit_add_char(cc, ch);
+		}
+		break;
+	case sQuoted:
+		if (ch == '"') {
+			clikit_add_char(cc, 0);
+			cc->st = sIdle;
+		} else if (ch == '\\\\') {
+			cc->st = sBackslash;
+		} else {
+			clikit_add_char(cc, ch);
+		}
+		break;
+	case sBackslash:
+		if (ch == 'n') {
+			clikit_add_char(cc, '\\n');
+		} else {
+			clikit_add_char(cc, ch);
+		}
+		cc->st = sQuoted;
+		break;
+	case sComment:
+		if (isblank(ch))
+			;
+		else if (isspace(ch))
+			cc->st = sIdle;
+		break;
+	default:
+		break;
+	}  
+	if (ch >= ' ' && ch <= '~')
+		printf("%d, %c\\n", cc->st, ch);
+	else
+		printf("%d, 0x%02x\\n", cc->st, ch);
+}
+
+void
+CLIkit_Input(struct clikit_context *cc, const char *s)
+{
+
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	while (*s != 0)
+		clikit_in_char(cc, *s++);
 }
 
 /*********************************************************************/

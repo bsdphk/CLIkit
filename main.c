@@ -78,6 +78,9 @@ main(int argc, char **argv)
 	cc = CLIkit_New_Context(ck);
 	assert(cc != NULL);
 
+	CLIkit_Input(cc, "\n\n# Comment\nfoo\nthings 0 this 3\n");
+	CLIkit_Input(cc, "\nthings 1 that \"foo\\nbar\" -3\n");
+
 	assert(0 == CLIkit_Del_Tree(ck, clikit_match, NULL));
 	assert(0 == CLIkit_Del_Tree(ck, match_foo, NULL));
 	assert(0 == CLIkit_Destroy_Context(cc));
