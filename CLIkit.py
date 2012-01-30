@@ -144,6 +144,7 @@ void CLIkit_Input(struct clikit_context *, const char *);
 /* input handler */
 
 #ifdef CLIKIT_INTERNAL
+
 int clikit_int_match(struct clikit_context *, const char *);
 int clikit_int_eol(struct clikit_context *);
 void clikit_int_push_instance(struct clikit_context *);
@@ -171,6 +172,7 @@ int clikit_int_unknown(struct clikit_context *);
 #include <stdlib.h>
 #include <string.h>
 
+#define CLIKIT_INTERNAL
 """)
 	fo.write("#include \"%s.h\"\n" % pfx)
 	fo.write("""
@@ -189,15 +191,15 @@ int clikit_int_unknown(struct clikit_context *);
 /*
  * List declarations.
  */
-#define	LIST_HEAD(name, type)						\
-struct name {								\
-	struct type *lh_first;	/* first element */			\
+#define	LIST_HEAD(name, type)						\\
+struct name {								\\
+	struct type *lh_first;	/* first element */			\\
 }
 
-#define	LIST_ENTRY(type)						\
-struct {								\
-	struct type *le_next;	/* next element */			\
-	struct type **le_prev;	/* address of previous next element */	\
+#define	LIST_ENTRY(type)						\\
+struct {								\\
+	struct type *le_next;	/* next element */			\\
+	struct type **le_prev;	/* address of previous next element */	\\
 }
 
 /*
@@ -206,34 +208,34 @@ struct {								\
 
 #define	LIST_FIRST(head)	((head)->lh_first)
 
-#define	LIST_FOREACH(var, head, field)					\
-	for ((var) = LIST_FIRST((head));				\
-	    (var);							\
+#define	LIST_FOREACH(var, head, field)					\\
+	for ((var) = LIST_FIRST((head));				\\
+	    (var);							\\
 	    (var) = LIST_NEXT((var), field))
 
-#define	LIST_FOREACH_SAFE(var, head, field, tvar)			\
-	for ((var) = LIST_FIRST((head));				\
-	    (var) && ((tvar) = LIST_NEXT((var), field), 1);		\
+#define	LIST_FOREACH_SAFE(var, head, field, tvar)			\\
+	for ((var) = LIST_FIRST((head));				\\
+	    (var) && ((tvar) = LIST_NEXT((var), field), 1);		\\
 	    (var) = (tvar))
 
-#define	LIST_INIT(head) do {						\
-	LIST_FIRST((head)) = NULL;					\
+#define	LIST_INIT(head) do {						\\
+	LIST_FIRST((head)) = NULL;					\\
 } while (0)
 
-#define	LIST_INSERT_HEAD(head, elm, field) do {				\
-	if ((LIST_NEXT((elm), field) = LIST_FIRST((head))) != NULL)	\
-		LIST_FIRST((head))->field.le_prev = &LIST_NEXT((elm), field);\
-	LIST_FIRST((head)) = (elm);					\
-	(elm)->field.le_prev = &LIST_FIRST((head));			\
+#define	LIST_INSERT_HEAD(head, elm, field) do {				\\
+	if ((LIST_NEXT((elm), field) = LIST_FIRST((head))) != NULL)	\\
+		LIST_FIRST((head))->field.le_prev = &LIST_NEXT((elm), field);\\
+	LIST_FIRST((head)) = (elm);					\\
+	(elm)->field.le_prev = &LIST_FIRST((head));			\\
 } while (0)
 
 #define	LIST_NEXT(elm, field)	((elm)->field.le_next)
 
-#define	LIST_REMOVE(elm, field) do {					\
-	if (LIST_NEXT((elm), field) != NULL)				\
-		LIST_NEXT((elm), field)->field.le_prev = 		\
-		    (elm)->field.le_prev;				\
-	*(elm)->field.le_prev = LIST_NEXT((elm), field);		\
+#define	LIST_REMOVE(elm, field) do {					\\
+	if (LIST_NEXT((elm), field) != NULL)				\\
+		LIST_NEXT((elm), field)->field.le_prev = 		\\
+		    (elm)->field.le_prev;				\\
+	*(elm)->field.le_prev = LIST_NEXT((elm), field);		\\
 } while (0)
 
 /*********************************************************************/
@@ -280,6 +282,7 @@ struct clikit_context {
 		sQuoted,
 		sBackslash
 	}				st;
+	unsigned			prefix;
 };
 
 /*********************************************************************/
@@ -477,11 +480,16 @@ CLIkit_Destroy_Context(struct clikit_context *cc)
 	return (0);
 }
 
-/*********************************************************************/
+/*********************************************************************
+ */
 
 #include <ctype.h>		/* XXX */
 #include <stdio.h>		/* XXX */
 /*lint -esym(534,printf) */
+
+/*********************************************************************
+ * Add one character to our buffer, extend as necessary.
+ */
 
 static void
 clikit_add_char(struct clikit_context *cc, int ch)
@@ -513,12 +521,44 @@ clikit_add_char(struct clikit_context *cc, int ch)
 	cc->p++;
 }
 
+/*********************************************************************
+ * We have a complete command, execute it.
+ */
+
+static void
+clikit_next(struct clikit_context *cc)
+{
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	assert(*cc->p);
+	cc->p += strlen(cc->p) + 1;
+}
+
+static int
+clikit_is_prefix(struct clikit_context *cc)
+{
+	struct clikit_prefix *cp;
+
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	assert(cc->ck != NULL && cc->ck->magic == CLIKIT_MAGIC);
+	LIST_FOREACH(cp, &cc->ck->prefixes, list) {
+		if (strcmp(cc->p, cp->pfx))
+			continue;
+		cc->prefix |= cp->val;
+		return (1);
+	}
+	return (0);
+}
+
+
 static void
 clikit_complete(struct clikit_context *cc)
 {
 	char *p;
+	struct clikit_branch *cb;
+	int i;
 
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	assert(cc->ck != NULL && cc->ck->magic == CLIKIT_MAGIC);
 	clikit_add_char(cc, 0);
 	printf("\\nZZ: %ld\\n", (cc->p - cc->b));
 	
@@ -526,8 +566,32 @@ clikit_complete(struct clikit_context *cc)
 		printf("\\t{%s}\\n", p);
 
 	cc->p = cc->b;
+	cc->prefix = 0;
+	while (clikit_is_prefix(cc))
+		clikit_next(cc);
+	if (!*cc->p) {
+		printf("XXX: Nothing but prefixes\\n");
+	}
+	i = -1;
+	LIST_FOREACH(cb, &cc->ck->branches, list) {
+		if (cb->root != NULL) {
+			if (strcmp(cc->p, cb->root))
+				continue;
+			clikit_next(cc);
+		}
+		i = cb->func(cc);
+		if (i)
+			break;
+	}
+	printf("Status: %d\\n", i);
+
+	cc->p = cc->b;
 	cc->st = sIdle;
 }
+
+/*********************************************************************
+ * Move the next char through the state machine
+ */
 
 static void
 clikit_in_char(struct clikit_context *cc, int ch)
@@ -543,9 +607,9 @@ clikit_in_char(struct clikit_context *cc, int ch)
 	case sIdle:
 		if (ch == '#')
 			cc->st = sComment;
-		else if (isspace(ch)) {
+		else if (isspace(ch))
 			cc->st = sIdle;
-		} else if (ch == '"')
+		else if (ch == '"')
 			cc->st = sQuoted;
 		else {
 			cc->st = sWord;
@@ -558,9 +622,8 @@ clikit_in_char(struct clikit_context *cc, int ch)
 			cc->st = sIdle;
 			if (!isblank(ch))
 				clikit_complete(cc);
-		} else {
+		} else 
 			clikit_add_char(cc, ch);
-		}
 		break;
 	case sQuoted:
 		if (ch == '"') {
@@ -573,11 +636,10 @@ clikit_in_char(struct clikit_context *cc, int ch)
 		}
 		break;
 	case sBackslash:
-		if (ch == 'n') {
+		if (ch == 'n')
 			clikit_add_char(cc, '\\n');
-		} else {
+		else
 			clikit_add_char(cc, ch);
-		}
 		cc->st = sQuoted;
 		break;
 	case sComment:
@@ -595,6 +657,8 @@ clikit_in_char(struct clikit_context *cc, int ch)
 		printf("%d, 0x%02x\\n", cc->st, ch);
 }
 
+/*********************************************************************/
+
 void
 CLIkit_Input(struct clikit_context *cc, const char *s)
 {
@@ -609,67 +673,117 @@ CLIkit_Input(struct clikit_context *cc, const char *s)
 int
 clikit_int_match(struct clikit_context *cc, const char *str)
 {
-	(void)cc;
-	(void)str;
-	return (-1);
+
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	printf("%s(%s)\\n", __func__, str);
+	if (strcmp(cc->p, str))
+		return (1);
+	clikit_next(cc);
+	return (0);
 }
 
 int
 clikit_int_eol(struct clikit_context *cc)
 {
-	(void)cc;
-	return (-1);
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	printf("%s()\\n", __func__);
+	if (*cc->p == 0)
+		return (1);
+	return (0);
 }
 
 void
 clikit_int_push_instance(struct clikit_context *cc)
 {
-	(void)cc;
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	printf("%s()\\n", __func__);
 }
 
 void
 clikit_int_pop_instance(struct clikit_context *cc)
 {
-	(void)cc;
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	printf("%s()\\n", __func__);
 }
 
 int
 clikit_int_unknown(struct clikit_context *cc)
 {
-	(void)cc;
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	printf("%s()\\n", __func__);
 	return (-1);
 }
 
 int
 clikit_int_arg_REAL(struct clikit_context *cc, double *arg)
 {
-	(void)cc;
-	(void)arg;
-	return (-1);
+	double d;
+	char *q = NULL;
+
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	assert(arg != NULL);
+	if (!*cc->p)
+		return (-1);
+	d = strtod(cc->p, &q);
+	if (*q != 0)
+		return (-1);
+	*arg = d;
+	clikit_next(cc);
+	return (0);
 }
 
 int
 clikit_int_arg_INT(struct clikit_context *cc, int *arg)
 {
-	(void)cc;
-	(void)arg;
-	return (-1);
+	unsigned long ul;
+	char *q = NULL;
+
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	assert(arg != NULL);
+	if (!*cc->p)
+		return (-1);
+	ul = strtoul(cc->p, &q, 0);
+	if (*q != 0)
+		return (-1);
+	if ((unsigned long)(int)ul != ul)
+		return (-1);
+	*arg = (int)ul;
+	clikit_next(cc);
+	return (0);
 }
 
 int
 clikit_int_arg_UINT(struct clikit_context *cc, unsigned *arg)
 {
-	(void)cc;
-	(void)arg;
-	return (-1);
+	unsigned long ul;
+	char *q = NULL;
+
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	assert(arg != NULL);
+	if (!*cc->p)
+		return (-1);
+	ul = strtoul(cc->p, &q, 0);
+	if (*q != 0)
+		return (-1);
+	if ((unsigned long)(unsigned)ul != ul)
+		return (-1);
+	*arg = (unsigned)ul;
+	clikit_next(cc);
+	return (0);
 }
 
 int
 clikit_int_arg_WORD(struct clikit_context *cc, const char **arg)
 {
-	(void)cc;
-	(void)arg;
-	return (-1);
+	char *p;
+
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	for (p = cc->p; *p; p++)
+		if (!isalnum(*p) && *p != '_')
+			return (-1);
+	*arg = cc->p;
+	clikit_next(cc);
+	return (0);
 }
 
 

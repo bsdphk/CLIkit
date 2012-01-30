@@ -7,7 +7,7 @@ LEAF foo {
 	name	match_foo
 }
 
-LEAF bar {
+LEAF bar REAL {
 	desc	"BAR is not foo"
 	func	do_bar
 }

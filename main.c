@@ -11,12 +11,14 @@ void
 do_foo(struct clikit_context *cc)
 {
 	(void)cc;
+	printf("%s()\n", __func__);
 }
 
 void
-do_bar(struct clikit_context *cc)
+do_bar(struct clikit_context *cc, double a0)
 {
 	(void)cc;
+	printf("%s(%g)\n", __func__, a0);
 }
 
 void
@@ -24,6 +26,7 @@ do_things_this(struct clikit_context *cc, unsigned a0)
 {
 	(void)cc;
 	(void)a0;
+	printf("%s()\n", __func__);
 }
 
 void
@@ -32,6 +35,7 @@ do_things_that(struct clikit_context *cc, const char *a0, int a1)
 	(void)cc;
 	(void)a0;
 	(void)a1;
+	printf("%s()\n", __func__);
 }
 
 void
@@ -39,6 +43,7 @@ pitch_it(struct clikit_context *cc, double a0)
 {
 	(void)cc;
 	(void)a0;
+	printf("%s()\n", __func__);
 }
 
 int
@@ -46,6 +51,7 @@ junk_instance(struct clikit_context *cc, const char *id)
 {
 	(void)cc;
 	(void)id;
+	printf("%s()\n", __func__);
 	return (0);
 }
 
@@ -54,6 +60,7 @@ things_instance(struct clikit_context *cc, unsigned id)
 {
 	(void)cc;
 	(void)id;
+	printf("%s()\n", __func__);
 	return (0);
 }
 
@@ -79,7 +86,8 @@ main(int argc, char **argv)
 	assert(cc != NULL);
 
 	CLIkit_Input(cc, "\n\n# Comment\nfoo\nthings 0 this 3\n");
-	CLIkit_Input(cc, "\nthings 1 that \"foo\\nbar\" -3\n");
+	CLIkit_Input(cc, "\nthings 1 that \"foobar\" -3\n");
+	CLIkit_Input(cc, "\nbar 3.1415\n");
 
 	assert(0 == CLIkit_Del_Tree(ck, clikit_match, NULL));
 	assert(0 == CLIkit_Del_Tree(ck, match_foo, NULL));
