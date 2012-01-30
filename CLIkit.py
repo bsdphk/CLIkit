@@ -107,8 +107,9 @@ def do_code(argv):
 #define __CLIKIT_H__
 
 struct clikit;
-struct clikit_tree;
 struct clikit_context;
+
+typedef int clikit_match_f(struct clikit_context *);
 
 struct clikit * CLIkit_New(void);
 int CLIkit_Destroy(struct clikit *);
@@ -117,9 +118,9 @@ int CLIkit_Destroy(struct clikit *);
 int CLIkit_Add_Prefix(struct clikit *, const char *pfx, unsigned val);
 int CLIkit_Del_Prefix(const struct clikit *, const char *pfx);
 
-int CLIkit_Add_Tree(struct clikit *, const struct clikit_tree *,
+int CLIkit_Add_Tree(struct clikit *, clikit_match_f *func,
     const char *root);
-int CLIkit_Del_Tree(const struct clikit *, const struct clikit_tree *,
+int CLIkit_Del_Tree(const struct clikit *, clikit_match_f *func,
     const char *root);
 
 struct clikit_context *CLIkit_New_Context(struct clikit *);
@@ -237,7 +238,7 @@ struct clikit_branch {
 	unsigned			magic;
 #define CLIKIT_BRANCH_MAGIC		0x21031be5
 	LIST_ENTRY(clikit_branch)	list;
-	const struct clikit_tree	*tree;
+	clikit_match_f			*func;
 	char				*root;
 };
 
@@ -290,7 +291,7 @@ CLIkit_Destroy(struct clikit *ck)
 		
 	LIST_FOREACH_SAFE(cb, &ck->branches, list, cb2) {
 		assert(cb != NULL && cb->magic == CLIKIT_BRANCH_MAGIC);
-		retval |= CLIkit_Del_Tree(ck, cb->tree, cb->root);
+		retval |= CLIkit_Del_Tree(ck, cb->func, cb->root);
 	}
 		
 	LIST_FOREACH_SAFE(cp, &ck->prefixes, list, cp2) {
@@ -354,7 +355,7 @@ CLIkit_Del_Prefix(const struct clikit *ck, const char *pfx)
 /*********************************************************************/
 
 int
-CLIkit_Add_Tree(struct clikit *ck, const struct clikit_tree *tree,
+CLIkit_Add_Tree(struct clikit *ck, clikit_match_f *func,
     const char *root)
 {
 	struct clikit_branch *cb;
@@ -362,26 +363,30 @@ CLIkit_Add_Tree(struct clikit *ck, const struct clikit_tree *tree,
 
 	assert(ck != NULL && ck->magic == CLIKIT_MAGIC);
 
-	LIST_FOREACH(cp, &ck->prefixes, list)
-		assert(strcmp(cp->pfx, root));
-	LIST_FOREACH(cb, &ck->branches, list)
-		assert(strcmp(cb->root, root));
+	if (root != NULL) {
+		LIST_FOREACH(cp, &ck->prefixes, list)
+			assert(strcmp(cp->pfx, root));
+		LIST_FOREACH(cb, &ck->branches, list)
+			assert(strcmp(cb->root, root));
+	}
 	cb = calloc(1L, sizeof *cb);
 	if (cb == NULL)
 		return (-1);
 	cb->magic = CLIKIT_BRANCH_MAGIC;
-	cb->root = strdup(root);
-	cb->tree = tree;
-	if (cb->root == NULL) {
-		free(cb);
-		return (-1);
+	cb->func = func;
+	if (root != NULL) {
+		cb->root = strdup(root);
+		if (cb->root == NULL) {
+			free(cb);
+			return (-1);
+		}
 	}
 	LIST_INSERT_HEAD(&ck->branches, cb, list);
 	return (0);
 }
 
 int
-CLIkit_Del_Tree(const struct clikit *ck, const struct clikit_tree *tree,
+CLIkit_Del_Tree(const struct clikit *ck, clikit_match_f *func,
     const char *root)
 {
 	struct clikit_branch *cb;
@@ -389,12 +394,19 @@ CLIkit_Del_Tree(const struct clikit *ck, const struct clikit_tree *tree,
 	assert(ck != NULL && ck->magic == CLIKIT_MAGIC);
 	LIST_FOREACH(cb, &ck->branches, list) {
 		assert(cb != NULL && cb->magic == CLIKIT_BRANCH_MAGIC);
-		if (cb->tree == tree && !strcmp(cb->root, root)) {
-			LIST_REMOVE(cb, list);
-			free(cb->root);
-			free(cb);
-			return (0);
-		}
+		if (cb->func != func)
+			continue;
+		if (cb->root == NULL && root == NULL)
+			;
+		else if (cb->root == NULL || root == NULL)
+			continue;
+		else if (strcmp(cb->root, root)) 
+			continue;
+
+		LIST_REMOVE(cb, list);
+		free(cb->root);
+		free(cb);
+		return (0);
 	}
 	return (-1);
 }
@@ -430,6 +442,75 @@ CLIkit_Destroy_Context(struct clikit_context *cc)
 	free(cc);
 	return (0);
 }
+
+/*********************************************************************/
+
+int
+clikit_int_match(struct clikit_context *cc, const char *str)
+{
+	(void)cc;
+	(void)str;
+	return (-1);
+}
+
+int
+clikit_int_eol(struct clikit_context *cc)
+{
+	(void)cc;
+	return (-1);
+}
+
+void
+clikit_int_push_instance(struct clikit_context *cc)
+{
+	(void)cc;
+}
+
+void
+clikit_int_pop_instance(struct clikit_context *cc)
+{
+	(void)cc;
+}
+
+int
+clikit_int_unknown(struct clikit_context *cc)
+{
+	(void)cc;
+	return (-1);
+}
+
+int
+clikit_int_arg_REAL(struct clikit_context *cc, double *arg)
+{
+	(void)cc;
+	(void)arg;
+	return (-1);
+}
+
+int
+clikit_int_arg_INT(struct clikit_context *cc, int *arg)
+{
+	(void)cc;
+	(void)arg;
+	return (-1);
+}
+
+int
+clikit_int_arg_UINT(struct clikit_context *cc, unsigned *arg)
+{
+	(void)cc;
+	(void)arg;
+	return (-1);
+}
+
+int
+clikit_int_arg_WORD(struct clikit_context *cc, const char **arg)
+{
+	(void)cc;
+	(void)arg;
+	return (-1);
+}
+
 
 """)
 
@@ -610,7 +691,7 @@ def parse_instance(tl, fc, fh):
 	for i in children:
 		print(i)
 		fc.write("\t" + s)
-		fc.write("if ((retval = %s(cc)) != 0)\n" % i)
+		fc.write("if ((retval = %s(cc)) != 0) /*lint !e838*/\n" % i)
 		fc.write("\t\t;\n")
 		s = "else "
 	fc.write("\telse\n")
@@ -636,6 +717,31 @@ def parse(fname, fc, fh):
 			children.append(parse_instance(tl, fc, fh))
 		else:
 			syntax("Unknown '%s' at top" % tl[0])
+
+	if len(children) == 0:
+		return
+
+	fh.write("/* At top BRANCH */\n")
+	fc.write("\n/* At top BRANCH */\n")
+
+	fh.write("int clikit_match(struct clikit_context *);\n")
+
+	fc.write("int\nclikit_match(struct clikit_context *cc)\n")
+	fc.write("{\n")
+	fc.write("\tint retval;\n")
+	fc.write("\n")
+	s = ""
+	for i in children:
+		print(i)
+		fc.write("\t" + s)
+		fc.write("if ((retval = %s(cc)) != 0) /*lint !e838*/\n" % i)
+		fc.write("\t\t;\n")
+		s = "else "
+	fc.write("\telse\n")
+	fc.write("\t\tretval = 0;\n")
+	fc.write("\treturn (retval);\n")
+	fc.write("}\n")
+
 
 #######################################################################
 #

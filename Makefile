@@ -9,9 +9,9 @@ all:
 	@echo "-------------------------------"
 	sed 1,27d test.c
 	@echo "-------------------------------"
-	#cc -g -c -Wall -Werror clikit.c
-	#cc -g -c -Wall -Werror main.c
-	#cc -g -c -Wall -Werror test.c
-	#cc -g -o a.out main.o clikit.o test.o
-	#./a.out
+	cc -g -c -Wall -Werror clikit.c
+	cc -g -c -Wall -Werror main.c
+	cc -g -c -Wall -Werror test.c
+	cc -g -o a.out main.o clikit.o test.o
+	./a.out
 	flexelint -I. clikit.c main.c test.c
