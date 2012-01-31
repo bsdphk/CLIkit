@@ -144,9 +144,12 @@ void CLIkit_Input(struct clikit_context *, const char *);
 /* input handler */
 
 #ifdef CLIKIT_INTERNAL
+/*
+ * Helper functions for used by the code generated with --tree.
+ */
 
 int clikit_int_match(struct clikit_context *, const char *);
-int clikit_int_eol(struct clikit_context *);
+int clikit_int_eol(const struct clikit_context *);
 void clikit_int_push_instance(struct clikit_context *);
 void clikit_int_pop_instance(struct clikit_context *);
 int clikit_int_unknown(struct clikit_context *);
@@ -683,7 +686,7 @@ clikit_int_match(struct clikit_context *cc, const char *str)
 }
 
 int
-clikit_int_eol(struct clikit_context *cc)
+clikit_int_eol(const struct clikit_context *cc)
 {
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
 	printf("%s()\\n", __func__);

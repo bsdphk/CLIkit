@@ -85,9 +85,15 @@ main(int argc, char **argv)
 	cc = CLIkit_New_Context(ck);
 	assert(cc != NULL);
 
-	CLIkit_Input(cc, "\n\n# Comment\nfoo\nthings 0 this 3\n");
-	CLIkit_Input(cc, "\nthings 1 that \"foobar\" -3\n");
-	CLIkit_Input(cc, "\nbar 3.1415\n");
+	if (argc > 1) {
+		char buf[BUFSIZ];
+		while (fgets(buf, sizeof buf, stdin))
+			CLIkit_Input(cc, buf);
+	} else {
+		CLIkit_Input(cc, "\n\n# Comment\nfoo\nthings 0 this 3\n");
+		CLIkit_Input(cc, "\nthings 1 that \"foobar\" -3\n");
+		CLIkit_Input(cc, "\nbar 3.1415\n");
+	}
 
 	assert(0 == CLIkit_Del_Tree(ck, clikit_match, NULL));
 	assert(0 == CLIkit_Del_Tree(ck, match_foo, NULL));
