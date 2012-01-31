@@ -4,6 +4,7 @@
 #include "clikit.h"
 #include "test.h"
 
+#define P_HELP		1
 #define P_SHOW		(1<<1)
 
 /*lint -esym(534, printf)*/
@@ -30,7 +31,7 @@ do_things_this(struct clikit_context *cc, unsigned a0)
 {
 	(void)cc;
 	(void)a0;
-	printf("%s()\n", __func__);
+	printf("%s(%u)\n", __func__, a0);
 }
 
 void
@@ -39,7 +40,7 @@ do_things_that(struct clikit_context *cc, const char *a0, int a1)
 	(void)cc;
 	(void)a0;
 	(void)a1;
-	printf("%s()\n", __func__);
+	printf("%s(%s, %d)\n", __func__, a0, a1);
 }
 
 void
@@ -47,7 +48,7 @@ pitch_it(struct clikit_context *cc, double a0)
 {
 	(void)cc;
 	(void)a0;
-	printf("%s()\n", __func__);
+	printf("%s(%g)\n", __func__, a0);
 }
 
 int
@@ -55,7 +56,7 @@ junk_instance(struct clikit_context *cc, const char *id)
 {
 	(void)cc;
 	(void)id;
-	printf("%s()\n", __func__);
+	printf("%s(%s)\n", __func__, id);
 	return (0);
 }
 
@@ -64,7 +65,7 @@ things_instance(struct clikit_context *cc, unsigned id)
 {
 	(void)cc;
 	(void)id;
-	printf("%s()\n", __func__);
+	printf("%s(%u)\n", __func__, id);
 	return (0);
 }
 
@@ -81,6 +82,7 @@ main(int argc, char **argv)
 	ck = CLIkit_New();
 	assert(ck != NULL);
 
+	assert(0 == CLIkit_Add_Prefix(ck, "help", P_HELP));
 	assert(0 == CLIkit_Add_Prefix(ck, "show", P_SHOW));
 
 	assert(0 == CLIkit_Add_Tree(ck, clikit_match, NULL));

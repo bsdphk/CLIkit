@@ -2,26 +2,26 @@
 # Comment1
 LEAF foo INT {
 	# Comment2
-	desc	"FOO is not bar"
+	desc	"state of foobar"
 	func	do_foo			# Comment3
 	name	match_foo
 }
 
 LEAF bar REAL {
-	desc	"BAR is not foo"
+	desc	"percentage of snafu"
 	func	do_bar
 }
 
 INSTANCE things UINT {
-	desc	"THINGS"
+	desc	"things of sorts"
 	func	things_instance
 
 	LEAF this UINT {
-		desc "things this"
+		desc "what is this"
 		func do_things_this
 	}
 	LEAF that WORD INT {
-		desc "things that"
+		desc "point to that"
 		func do_things_that
 	}
 
@@ -30,7 +30,7 @@ INSTANCE things UINT {
 		func junk_instance
 
 		LEAF whatchamacallit REAL {
-			desc "thingmajic"
+			desc "thingmajics"
 			func pitch_it
 		}
 	}

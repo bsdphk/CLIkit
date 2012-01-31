@@ -38,6 +38,9 @@
 # with --tree in a software project, for instance once for each loadable
 # module etc.
 #
+#
+# XXX: blank likes return ("nothing but prefixes")
+# XXX: "help things 4" doesn't work (Unspecified CLI error.)
 
 from __future__ import print_function
 
@@ -151,6 +154,9 @@ int CLIkit_Destroy(struct clikit *);
  * Which prefixes are present are communicated in a bit map you can
  * get with CLIkit_GetPrefix() (see below)
  *
+ * Prefix value 1 is the help prefix and it does weird and wonderful
+ * things other prefixes do not do.
+ *
  * You get to define the bitmap values and prefixes with these two
  * functions:
  */
@@ -217,6 +223,9 @@ unsigned CLIkit_Get_Prefix(const struct clikit_context *);
  */
 
 int clikit_int_match(struct clikit_context *, const char *);
+int clikit_int_help(struct clikit_context *, const char *);
+int clikit_int_tophelp(struct clikit_context *, const char *, const char *);
+void clikit_int_tophelplevel(struct clikit_context *, int);
 int clikit_int_eol(const struct clikit_context *);
 void clikit_int_push_instance(struct clikit_context *);
 void clikit_int_pop_instance(struct clikit_context *);
@@ -350,6 +359,7 @@ struct clikit_context {
 		sBackslash
 	}				st;
 	unsigned			prefix;
+	unsigned			help;
 
 	int				error;
 
@@ -415,12 +425,20 @@ CLIkit_Add_Prefix(struct clikit *ck, const char *pfx, unsigned val)
 
 	assert(ck != NULL && ck->magic == CLIKIT_MAGIC);
 
+	if (val == 0 && strcmp(pfx, "help")) {
+		/* Only "help" is allowed to have zero value */
+		return (-1);
+	}
+
 	LIST_FOREACH(cp, &ck->prefixes, list) {
+		/* XXX: return -1 + errno */
 		assert(strcmp(cp->pfx, pfx));
 		assert(cp->val != val);
 	}
-	LIST_FOREACH(cb, &ck->branches, list)
-		assert(strcmp(cb->root, pfx));
+	LIST_FOREACH(cb, &ck->branches, list) {
+		/* XXX: return -1 + errno */
+		assert(cb->root == NULL || strcmp(cb->root, pfx));
+	}
 
 	cp = calloc(1L, sizeof *cp);
 	if (cp == NULL)
@@ -676,6 +694,48 @@ clikit_add_char(struct clikit_context *cc, int ch)
 }
 
 /*********************************************************************
+ */
+
+void
+clikit_int_tophelplevel(struct clikit_context *cc, int i)
+{
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	cc->help += i;
+}
+
+int
+clikit_int_tophelp(struct clikit_context *cc, const char *s1, const char *s2)
+{
+
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	if (cc->help == 0)
+		return (0);
+	CLIkit_Printf(cc, "%*s%-*s %s\\n",
+	    cc->help * 2, "",
+	    30 - cc->help * 2, s1, s2);
+	return (1);
+}
+
+static void
+clikit_top_help(struct clikit_context *cc)
+{
+	struct clikit_branch *cb;
+
+	cc->help = 1;
+	LIST_FOREACH(cb, &cc->ck->branches, list) {
+		if (cb->root) {
+			CLIkit_Printf(cc, "%.*s%s:\\n",
+			    cc->help * 2, "", cb->root);
+			cc->help++;
+		}
+		cb->func(cc);
+		if (cb->root) 
+			cc->help--;
+	}
+}
+
+
+/*********************************************************************
  * We have a complete command, execute it.
  */
 
@@ -703,7 +763,6 @@ clikit_is_prefix(struct clikit_context *cc)
 	return (0);
 }
 
-
 static void
 clikit_complete(struct clikit_context *cc)
 {
@@ -717,14 +776,17 @@ clikit_complete(struct clikit_context *cc)
 	clikit_add_char(cc, 0);
 	
 	cc->p = cc->b;
+	cc->help = 0;
 	cc->prefix = 0;
 	cc->error = 0;
 	while (clikit_is_prefix(cc))
 		clikit_next(cc);
-	if (!*cc->p) {
+	if (!*cc->p && (cc->prefix & 1))
+		clikit_top_help(cc);
+	else if (!*cc->p)
 		(void)CLIkit_Error(cc, -1,
 		    "Command is nothing but prefixes\\n");
-	} else {
+	else {
 		i = -1;
 		LIST_FOREACH(cb, &cc->ck->branches, list) {
 			if (cb->root != NULL) {
@@ -825,6 +887,19 @@ CLIkit_Input(struct clikit_context *cc, const char *s)
 }
 
 /*********************************************************************/
+
+int
+clikit_int_help(struct clikit_context *cc, const char *str)
+{
+
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	if (*cc->p == 0 && (cc->prefix & 1)) {
+		(void)CLIkit_Puts(cc, str);
+		(void)CLIkit_Puts(cc, "\\n");
+		return (1);
+	}
+	return (0);
+}
 
 int
 clikit_int_match(struct clikit_context *cc, const char *str)
@@ -1014,6 +1089,8 @@ def parse_leaf(tl, fc, fh):
 		syntax("Missing '}' in LEAF(%s)" % nm)
 	assert tl.pop(0) == "}"
 
+	if kv['desc'] == None:
+		kv['desc'] = "(no description)"
 	if kv['name'] == None:
 		kv['name'] = "match_%d" % nr
 		static = "static "
@@ -1038,7 +1115,17 @@ def parse_leaf(tl, fc, fh):
 		fc.write("\t%s arg_%d;\n" % (types[i], n))
 		n += 1
 	fc.write("\n")	
+	s = ''
+	for i in al:
+		s += " <" + i + ">"
+	fc.write('\tif (clikit_int_tophelp(cc, "%s%s", "%s"))\n' %
+		(nm, s, kv['desc']))
+	fc.write('\t\treturn(0);\n')
 	fc.write('\tif (clikit_int_match(cc, "%s"))\n\t\treturn(0);\n' % nm)
+
+	fc.write('\tif (clikit_int_help(cc, "%s: %s"))\n' % (nm, kv['desc']))
+	fc.write('\t\treturn(1);\n')
+
 	n = 0
 	for i in al:
 		fc.write('\tif (clikit_int_arg_%s(cc, &arg_%d))\n' % (i, n))
@@ -1092,6 +1179,8 @@ def parse_instance(tl, fc, fh):
 	fh.write("/* At token %d INSTANCE %s */\n" % (nr, nm))
 	fc.write("\n/* At token %d INSTANCE %s */\n" % (nr, nm))
 
+	if kv['desc'] == None:
+		kv['desc'] = "(no description)"
 	if kv['name'] == None:
 		kv['name'] = "match_%d" % nr
 		static = "static "
@@ -1119,7 +1208,25 @@ def parse_instance(tl, fc, fh):
 		fc.write("\t%s arg_%d;\n" % (types[i], n))
 		n += 1
 	fc.write("\n")	
+
+	s = ""
+	for i in al:
+		s += " <" + i + ">"
+	fc.write('\tif (clikit_int_tophelp(cc, "%s%s", "%s")) {\n' %
+	    (nm, s, kv['desc']))
+	fc.write('\t\tclikit_int_tophelplevel(cc, 1);\n')
+	for i in children:
+		fc.write('\t\t(void)%s(cc);\n' % i)
+	fc.write('\t\tclikit_int_tophelplevel(cc, -1);\n')
+	fc.write('\t\treturn(0);\n')
+	fc.write('\t}\n')
+
 	fc.write('\tif (clikit_int_match(cc, "%s"))\n\t\treturn(0);\n' % nm)
+
+	fc.write('\tif (clikit_int_help(cc, "%s: %s"))\n' %
+	    (nm, kv['desc']))
+	fc.write('\t\treturn(1);\n')
+		
 	n = 0
 	for i in al:
 		fc.write('\tif (clikit_int_arg_%s(cc, &arg_%d))\n' % (i, n))
