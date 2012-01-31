@@ -86,7 +86,7 @@ main(int argc, char **argv)
 	assert(0 == CLIkit_Add_Prefix(ck, "show", P_SHOW));
 
 	assert(0 == CLIkit_Add_Tree(ck, clikit_match, NULL));
-	assert(0 == CLIkit_Add_Tree(ck, match_foo, NULL));
+	assert(0 == CLIkit_Add_Tree(ck, match_foo, "snafu"));
 
 	cc = CLIkit_New_Context(ck);
 	assert(cc != NULL);
@@ -104,7 +104,7 @@ main(int argc, char **argv)
 	}
 
 	assert(0 == CLIkit_Del_Tree(ck, clikit_match, NULL));
-	assert(0 == CLIkit_Del_Tree(ck, match_foo, NULL));
+	assert(0 == CLIkit_Del_Tree(ck, match_foo, "snafu"));
 	assert(0 == CLIkit_Destroy_Context(cc));
 	assert(0 == CLIkit_Del_Prefix(ck, "show"));
 	assert(0 == CLIkit_Destroy(ck));

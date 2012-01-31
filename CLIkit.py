@@ -41,6 +41,7 @@
 #
 # XXX: blank likes return ("nothing but prefixes")
 # XXX: "help things 4" doesn't work (Unspecified CLI error.)
+# XXX: autodetect colum width for tophelp
 
 from __future__ import print_function
 
@@ -223,8 +224,9 @@ unsigned CLIkit_Get_Prefix(const struct clikit_context *);
  */
 
 int clikit_int_match(struct clikit_context *, const char *);
-int clikit_int_help(struct clikit_context *, const char *);
-int clikit_int_tophelp(struct clikit_context *, const char *, const char *);
+int clikit_int_help(const struct clikit_context *, const char *);
+int clikit_int_tophelp(const struct clikit_context *, const char *,
+    const char *);
 void clikit_int_tophelplevel(struct clikit_context *, int);
 int clikit_int_eol(const struct clikit_context *);
 void clikit_int_push_instance(struct clikit_context *);
@@ -359,7 +361,7 @@ struct clikit_context {
 		sBackslash
 	}				st;
 	unsigned			prefix;
-	unsigned			help;
+	int				help;
 
 	int				error;
 
@@ -487,7 +489,7 @@ CLIkit_Add_Tree(struct clikit *ck, clikit_match_f *func,
 		LIST_FOREACH(cp, &ck->prefixes, list)
 			assert(strcmp(cp->pfx, root));
 		LIST_FOREACH(cb, &ck->branches, list)
-			assert(strcmp(cb->root, root));
+			assert(cb->root == NULL || strcmp(cb->root, root));
 	}
 	cb = calloc(1L, sizeof *cb);
 	if (cb == NULL)
@@ -704,13 +706,14 @@ clikit_int_tophelplevel(struct clikit_context *cc, int i)
 }
 
 int
-clikit_int_tophelp(struct clikit_context *cc, const char *s1, const char *s2)
+clikit_int_tophelp(const struct clikit_context *cc, const char *s1,
+    const char *s2)
 {
 
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
 	if (cc->help == 0)
 		return (0);
-	CLIkit_Printf(cc, "%*s%-*s %s\\n",
+	(void)CLIkit_Printf(cc, "%*s%-*s %s\\n",
 	    cc->help * 2, "",
 	    30 - cc->help * 2, s1, s2);
 	return (1);
@@ -724,11 +727,11 @@ clikit_top_help(struct clikit_context *cc)
 	cc->help = 1;
 	LIST_FOREACH(cb, &cc->ck->branches, list) {
 		if (cb->root) {
-			CLIkit_Printf(cc, "%.*s%s:\\n",
+			(void)CLIkit_Printf(cc, "%*s%s:\\n",
 			    cc->help * 2, "", cb->root);
 			cc->help++;
 		}
-		cb->func(cc);
+		(void)cb->func(cc);
 		if (cb->root) 
 			cc->help--;
 	}
@@ -889,7 +892,7 @@ CLIkit_Input(struct clikit_context *cc, const char *s)
 /*********************************************************************/
 
 int
-clikit_int_help(struct clikit_context *cc, const char *str)
+clikit_int_help(const struct clikit_context *cc, const char *str)
 {
 
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
@@ -1212,7 +1215,7 @@ def parse_instance(tl, fc, fh):
 	s = ""
 	for i in al:
 		s += " <" + i + ">"
-	fc.write('\tif (clikit_int_tophelp(cc, "%s%s", "%s")) {\n' %
+	fc.write('\tif (clikit_int_tophelp(cc, "%s%s:", "%s")) {\n' %
 	    (nm, s, kv['desc']))
 	fc.write('\t\tclikit_int_tophelplevel(cc, 1);\n')
 	for i in children:
