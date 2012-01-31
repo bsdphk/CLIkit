@@ -120,28 +120,96 @@ def do_code(argv):
 #ifndef __CLIKIT_H__
 #define __CLIKIT_H__
 
+#include <stdarg.h>
+
 struct clikit;
 struct clikit_context;
 
+/*---------------------------------------------------------------------
+ * The type of generated codes named entrypoints
+ *
+ * XXX: rename to "clikit_branch"
+ */
 typedef int clikit_match_f(struct clikit_context *);
+
+/*---------------------------------------------------------------------
+ * Management of CLIkit instances
+ *
+ * Your basic New/Destroy API, I don't need to explain this, right ?
+ */
 
 struct clikit * CLIkit_New(void);
 int CLIkit_Destroy(struct clikit *);
-/* Cfk_ErrorHandling() */
+/* XXX: error_handling() */
+
+/*---------------------------------------------------------------------
+ * Management of command prefixes ("help", "show" etc.)
+ *
+ * Prefixes are things like "help", "show", "enable", "disable" you
+ * want to be able to put in front of every command in your language.
+ *
+ * Which prefixes are present are communicated in a bit map you can
+ * get with CLIkit_GetPrefix() (see below)
+ *
+ * You get to define the bitmap values and prefixes with these two
+ * functions:
+ */
 
 int CLIkit_Add_Prefix(struct clikit *, const char *pfx, unsigned val);
 int CLIkit_Del_Prefix(const struct clikit *, const char *pfx);
 
-int CLIkit_Add_Tree(struct clikit *, clikit_match_f *func,
-    const char *root);
+/*---------------------------------------------------------------------
+ * Management of command branches.
+ *
+ * Use these functions to add/delete branches from the --tree files
+ * you have compiled.
+ *
+ * You can prefix a branch with a "root" so that you can avoid
+ * duplication.
+ *
+ * XXX: rename to Add/Del_Branch
+ * XXX: add priv arg.
+ */
+int CLIkit_Add_Tree(struct clikit *, clikit_match_f *func, const char *root);
 int CLIkit_Del_Tree(const struct clikit *, clikit_match_f *func,
     const char *root);
 
+/*---------------------------------------------------------------------
+ * Management of sessions.
+ *
+ * A session is a source of cli commands, stdin, a TCP socket or a file.
+ */
 struct clikit_context *CLIkit_New_Context(struct clikit *);
 int CLIkit_Destroy_Context(struct clikit_context *);
+
+/*
+ * Configure a string output function
+ *
+ * This function is called a number of times for each CLI command executed.
+ * Last time with a NULL 'str' argument, to signal end of the transaction.
+ *
+ * The error argument is zero by default, '-1' if an error originates
+ * inside CLIkit and comes from CLIkit_Error() (see below) in all other cases.
+ *
+ * If no function is registered, the default function sends output to stdout.
+ *
+ * A return value less than zero means "stop generating output" for whatever
+ * reason the function might have for this sentiment.
+ */
+typedef int clikit_puts_f(void *priv, int error, const char *str);
+void CLIkit_Set_Puts(struct clikit_context *, clikit_puts_f *func, void *priv);
+
+/* Inject bytes into CLI interpreter */
 void CLIkit_Input(struct clikit_context *, const char *);
-/* output handler */
-/* input handler */
+
+/*---------------------------------------------------------------------
+ * Functions to call from the command implementation functions
+ */
+
+int CLIkit_Error(struct clikit_context *, int error, const char *fmt, ...);
+int CLIkit_Puts(const struct clikit_context *, const char *str);
+int CLIkit_Printf(const struct clikit_context *, const char *fmt, ...);
+unsigned CLIkit_Get_Prefix(const struct clikit_context *);
 
 #ifdef CLIKIT_INTERNAL
 /*
@@ -171,7 +239,8 @@ int clikit_int_unknown(struct clikit_context *);
 /*********************************************************************/
 
 #include <assert.h>
-#include <stdint.h>
+#include <ctype.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -179,11 +248,6 @@ int clikit_int_unknown(struct clikit_context *);
 """)
 	fo.write("#include \"%s.h\"\n" % pfx)
 	fo.write("""
-
-/* XXX: need <sys/queue.h> */
-/* XXX: need "miniobj.h" */
-/* XXX: need "argv.h" */
-/* XXX: need "lineup.h" */
 
 /********************************************************************
  * From FreeBSD's <sys/queue.h>
@@ -286,6 +350,13 @@ struct clikit_context {
 		sBackslash
 	}				st;
 	unsigned			prefix;
+
+	int				error;
+
+	/* "Puts" handler */
+	clikit_puts_f			*puts_func;
+	void				*puts_priv;
+	int				puts_int;
 };
 
 /*********************************************************************/
@@ -466,6 +537,7 @@ CLIkit_New_Context(struct clikit *ck)
 	cc->st = sIdle;
 	LIST_INSERT_HEAD(&ck->contexts, cc, list);
 
+	CLIkit_Set_Puts(cc, NULL, NULL);
 	return (cc);
 }
 
@@ -483,12 +555,91 @@ CLIkit_Destroy_Context(struct clikit_context *cc)
 	return (0);
 }
 
+/**********************************************************************/
+
+int
+CLIkit_Error(struct clikit_context *cc, int error, const char *fmt, ...)
+{
+	va_list ap;
+	int retval;
+	char *s = NULL;
+
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	cc->error = error;
+	va_start(ap, fmt);
+	retval = vasprintf(&s, fmt, ap);
+	if (retval != -1)
+		retval = cc->puts_func(cc->puts_priv, error, s);
+	va_end(ap);
+	return (retval);
+}
+
+int
+CLIkit_Puts(const struct clikit_context *cc, const char *str)
+{
+
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	return (cc->puts_func(cc->puts_priv, cc->error, str));
+}
+
+int
+CLIkit_Printf(const struct clikit_context *cc, const char *fmt, ...)
+{
+	va_list ap;
+	int retval;
+	char *s = NULL;
+
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	va_start(ap, fmt);
+	retval = vasprintf(&s, fmt, ap);
+	if (retval != -1)
+		retval = cc->puts_func(cc->puts_priv, cc->error, s);
+	va_end(ap);
+	return (retval);
+}
+
+unsigned
+CLIkit_Get_Prefix(const struct clikit_context *cc)
+{
+
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	return (cc->prefix);
+}
+
 /*********************************************************************
+ * Puts and default function
  */
 
-#include <ctype.h>		/* XXX */
-#include <stdio.h>		/* XXX */
-/*lint -esym(534,printf) */
+static int
+clikit_default_puts(void *priv, int error, const char *str)
+{
+	int *pp = priv;
+	int retval = 0;
+
+	if (str == NULL) {
+		*pp = 0;
+	} else {
+		if (*pp != error)
+			(void)printf("ERROR %d:\\n", error);
+		*pp = error;
+		if (fputs(str, stdout) == EOF)
+			retval = -1;
+	}
+	return (retval);
+}
+
+void
+CLIkit_Set_Puts(struct clikit_context *cc, clikit_puts_f *func, void *priv)
+{
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+
+	if (func == NULL) {
+		func = clikit_default_puts;
+		priv = &cc->puts_int;
+	}
+	cc->puts_func = func;
+	cc->puts_priv = priv;
+}
 
 /*********************************************************************
  * Add one character to our buffer, extend as necessary.
@@ -497,7 +648,7 @@ CLIkit_Destroy_Context(struct clikit_context *cc)
 static void
 clikit_add_char(struct clikit_context *cc, int ch)
 {
-	int l;
+	size_t l;
 	char *p;
 
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
@@ -506,12 +657,12 @@ clikit_add_char(struct clikit_context *cc, int ch)
 	assert(cc->p <= cc->e);
 
 	if (cc->p == cc->e) {
-		l = cc->e - cc->b;
+		l = cc->e - cc->b;	/*lint !e732*/
 		if (l > 4096L)
 			l += 4096L;
 		else
 			l += l;
-		p = realloc(cc->b, (size_t)l);
+		p = realloc(cc->b, l);
 		/* XXX: p */
 		assert(p != NULL);
 		cc->p = p + (cc->p - cc->b);
@@ -556,38 +707,39 @@ clikit_is_prefix(struct clikit_context *cc)
 static void
 clikit_complete(struct clikit_context *cc)
 {
-	char *p;
 	struct clikit_branch *cb;
 	int i;
 
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
 	assert(cc->ck != NULL && cc->ck->magic == CLIKIT_MAGIC);
-	clikit_add_char(cc, 0);
-	printf("\\nZZ: %ld\\n", (cc->p - cc->b));
-	
-	for (p = cc->b; p < cc->p; p += strlen(p) + 1)
-		printf("\\t{%s}\\n", p);
 
+	/* Terminate the list */
+	clikit_add_char(cc, 0);
+	
 	cc->p = cc->b;
 	cc->prefix = 0;
+	cc->error = 0;
 	while (clikit_is_prefix(cc))
 		clikit_next(cc);
 	if (!*cc->p) {
-		printf("XXX: Nothing but prefixes\\n");
-	}
-	i = -1;
-	LIST_FOREACH(cb, &cc->ck->branches, list) {
-		if (cb->root != NULL) {
-			if (strcmp(cc->p, cb->root))
-				continue;
-			clikit_next(cc);
+		(void)CLIkit_Error(cc, -1,
+		    "Command is nothing but prefixes\\n");
+	} else {
+		i = -1;
+		LIST_FOREACH(cb, &cc->ck->branches, list) {
+			if (cb->root != NULL) {
+				if (strcmp(cc->p, cb->root))
+					continue;
+				clikit_next(cc);
+			}
+			i = cb->func(cc);
+			if (i)
+				break;
 		}
-		i = cb->func(cc);
-		if (i)
-			break;
+		if (i == 0)
+			(void)CLIkit_Error(cc, -1, "Unknown command.\\n");
 	}
-	printf("Status: %d\\n", i);
-
+	(void)cc->puts_func(cc->puts_priv, cc->error, NULL);
 	cc->p = cc->b;
 	cc->st = sIdle;
 }
@@ -601,10 +753,6 @@ clikit_in_char(struct clikit_context *cc, int ch)
 {
 
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
-	if (ch >= ' ' && ch <= '~')
-		printf("%d, %c\\t", cc->st, ch);
-	else
-		printf("%d, 0x%02x\\t", cc->st, ch);
 
 	switch(cc->st) {
 	case sIdle:
@@ -654,10 +802,6 @@ clikit_in_char(struct clikit_context *cc, int ch)
 	default:
 		break;
 	}  
-	if (ch >= ' ' && ch <= '~')
-		printf("%d, %c\\n", cc->st, ch);
-	else
-		printf("%d, 0x%02x\\n", cc->st, ch);
 }
 
 /*********************************************************************/
@@ -678,7 +822,6 @@ clikit_int_match(struct clikit_context *cc, const char *str)
 {
 
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
-	printf("%s(%s)\\n", __func__, str);
 	if (strcmp(cc->p, str))
 		return (1);
 	clikit_next(cc);
@@ -689,7 +832,7 @@ int
 clikit_int_eol(const struct clikit_context *cc)
 {
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
-	printf("%s()\\n", __func__);
+	(void)printf("%s()\\n", __func__);
 	if (*cc->p == 0)
 		return (1);
 	return (0);
@@ -699,21 +842,21 @@ void
 clikit_int_push_instance(struct clikit_context *cc)
 {
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
-	printf("%s()\\n", __func__);
+	(void)printf("%s()\\n", __func__);
 }
 
 void
 clikit_int_pop_instance(struct clikit_context *cc)
 {
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
-	printf("%s()\\n", __func__);
+	(void)printf("%s()\\n", __func__);
 }
 
 int
 clikit_int_unknown(struct clikit_context *cc)
 {
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
-	printf("%s()\\n", __func__);
+	(void)printf("%s()\\n", __func__);
 	return (-1);
 }
 

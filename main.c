@@ -6,12 +6,16 @@
 
 #define P_SHOW		(1<<1)
 
+/*lint -esym(534, printf)*/
 
 void
 do_foo(struct clikit_context *cc)
 {
 	(void)cc;
-	printf("%s()\n", __func__);
+	printf("%s(pfx=%x)\n", __func__, CLIkit_Get_Prefix(cc));
+	(void)CLIkit_Error(cc, 7, "<%g>\n", 3.141592);
+	(void)CLIkit_Printf(cc, "<%g>\n", 3.141592);
+	(void)CLIkit_Puts(cc, "The end\n");
 }
 
 void
@@ -85,9 +89,11 @@ main(int argc, char **argv)
 	cc = CLIkit_New_Context(ck);
 	assert(cc != NULL);
 
+	CLIkit_Set_Puts(cc, NULL, NULL);
+
 	if (argc > 1) {
 		char buf[BUFSIZ];
-		while (fgets(buf, sizeof buf, stdin))
+		while (fgets(buf, (int)sizeof buf, stdin))
 			CLIkit_Input(cc, buf);
 	} else {
 		CLIkit_Input(cc, "\n\n# Comment\nfoo\nthings 0 this 3\n");
