@@ -708,7 +708,7 @@ static void
 clikit_complete(struct clikit_context *cc)
 {
 	struct clikit_branch *cb;
-	int i;
+	int i = 0;
 
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
 	assert(cc->ck != NULL && cc->ck->magic == CLIKIT_MAGIC);
@@ -739,6 +739,9 @@ clikit_complete(struct clikit_context *cc)
 		if (i == 0)
 			(void)CLIkit_Error(cc, -1, "Unknown command.\\n");
 	}
+	if (i == -1 && cc->error != i)
+		(void)CLIkit_Error(cc, -1, "Unspecified CLI error.\\n");
+
 	(void)cc->puts_func(cc->puts_priv, cc->error, NULL);
 	cc->p = cc->b;
 	cc->st = sIdle;
@@ -758,7 +761,9 @@ clikit_in_char(struct clikit_context *cc, int ch)
 	case sIdle:
 		if (ch == '#')
 			cc->st = sComment;
-		else if (isspace(ch))
+		else if (isspace(ch) && !isblank(ch))
+			clikit_complete(cc);
+		else if (isspace(ch)) 
 			cc->st = sIdle;
 		else if (ch == '"')
 			cc->st = sQuoted;
@@ -782,6 +787,10 @@ clikit_in_char(struct clikit_context *cc, int ch)
 			cc->st = sIdle;
 		} else if (ch == '\\\\') {
 			cc->st = sBackslash;
+		} else if (isspace(ch) && !isblank(ch)) {
+			(void)CLIkit_Error(cc, -1, "Unterminated quotes\\n");
+			cc->p = cc->b;
+			cc->st = sIdle;
 		} else {
 			clikit_add_char(cc, ch);
 		}
@@ -868,11 +877,15 @@ clikit_int_arg_REAL(struct clikit_context *cc, double *arg)
 
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
 	assert(arg != NULL);
-	if (!*cc->p)
+	if (!*cc->p) {
+		(void)CLIkit_Error(cc, -1, "Missing REAL argument\\n");
 		return (-1);
+	}
 	d = strtod(cc->p, &q);
-	if (*q != 0)
+	if (*q != 0) {
+		(void)CLIkit_Error(cc, -1, "Invalid REAL argument\\n");
 		return (-1);
+	}
 	*arg = d;
 	clikit_next(cc);
 	return (0);
@@ -886,13 +899,19 @@ clikit_int_arg_INT(struct clikit_context *cc, int *arg)
 
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
 	assert(arg != NULL);
-	if (!*cc->p)
+	if (!*cc->p) {
+		(void)CLIkit_Error(cc, -1, "Missing INT argument\\n");
 		return (-1);
+	}
 	ul = strtoul(cc->p, &q, 0);
-	if (*q != 0)
+	if (*q != 0) {
+		(void)CLIkit_Error(cc, -1, "Invalid INT argument\\n");
 		return (-1);
-	if ((unsigned long)(int)ul != ul)
+	}
+	if ((unsigned long)(int)ul != ul) {
+		(void)CLIkit_Error(cc, -1, "Too big INT argument\\n");
 		return (-1);
+	}
 	*arg = (int)ul;
 	clikit_next(cc);
 	return (0);
@@ -906,13 +925,19 @@ clikit_int_arg_UINT(struct clikit_context *cc, unsigned *arg)
 
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
 	assert(arg != NULL);
-	if (!*cc->p)
+	if (!*cc->p) {
+		(void)CLIkit_Error(cc, -1, "Missing UINT argument\\n");
 		return (-1);
+	}
 	ul = strtoul(cc->p, &q, 0);
-	if (*q != 0)
+	if (*q != 0) {
+		(void)CLIkit_Error(cc, -1, "Invalid UINT argument\\n");
 		return (-1);
-	if ((unsigned long)(unsigned)ul != ul)
+	}
+	if ((unsigned long)(unsigned)ul != ul) {
+		(void)CLIkit_Error(cc, -1, "Too big UINT argument\\n");
 		return (-1);
+	}
 	*arg = (unsigned)ul;
 	clikit_next(cc);
 	return (0);
@@ -925,8 +950,10 @@ clikit_int_arg_WORD(struct clikit_context *cc, const char **arg)
 
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
 	for (p = cc->p; *p; p++)
-		if (!isalnum(*p) && *p != '_')
+		if (!isalnum(*p) && *p != '_') {
+			(void)CLIkit_Error(cc, -1, "Invalid WORD argument\\n");
 			return (-1);
+		}
 	*arg = cc->p;
 	clikit_next(cc);
 	return (0);

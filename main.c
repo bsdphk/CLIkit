@@ -9,10 +9,10 @@
 /*lint -esym(534, printf)*/
 
 void
-do_foo(struct clikit_context *cc)
+do_foo(struct clikit_context *cc, int a0)
 {
 	(void)cc;
-	printf("%s(pfx=%x)\n", __func__, CLIkit_Get_Prefix(cc));
+	printf("%s(pfx=%x, a0=%d)\n", __func__, CLIkit_Get_Prefix(cc), a0);
 	(void)CLIkit_Error(cc, 7, "<%g>\n", 3.141592);
 	(void)CLIkit_Printf(cc, "<%g>\n", 3.141592);
 	(void)CLIkit_Puts(cc, "The end\n");

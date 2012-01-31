@@ -1,6 +1,6 @@
 
 # Comment1
-LEAF foo {
+LEAF foo INT {
 	# Comment2
 	desc	"FOO is not bar"
 	func	do_foo			# Comment3
