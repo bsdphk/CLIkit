@@ -39,7 +39,6 @@
 # module etc.
 #
 #
-# XXX: blank likes return ("nothing but prefixes")
 # XXX: "help things 4" doesn't work (Unspecified CLI error.)
 # XXX: autodetect colum width for tophelp
 
@@ -775,38 +774,41 @@ clikit_complete(struct clikit_context *cc)
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
 	assert(cc->ck != NULL && cc->ck->magic == CLIKIT_MAGIC);
 
-	/* Terminate the list */
-	clikit_add_char(cc, 0);
-	
-	cc->p = cc->b;
-	cc->help = 0;
-	cc->prefix = 0;
-	cc->error = 0;
-	while (clikit_is_prefix(cc))
-		clikit_next(cc);
-	if (!*cc->p && (cc->prefix & 1))
-		clikit_top_help(cc);
-	else if (!*cc->p)
-		(void)CLIkit_Error(cc, -1,
-		    "Command is nothing but prefixes\\n");
-	else {
-		i = -1;
-		LIST_FOREACH(cb, &cc->ck->branches, list) {
-			if (cb->root != NULL) {
-				if (strcmp(cc->p, cb->root))
-					continue;
-				clikit_next(cc);
+	if (cc->p != cc->b) {
+		/* Terminate the list */
+		clikit_add_char(cc, 0);
+		
+		cc->p = cc->b;
+		cc->help = 0;
+		cc->prefix = 0;
+		cc->error = 0;
+		while (clikit_is_prefix(cc))
+			clikit_next(cc);
+		if (!*cc->p && (cc->prefix & 1))
+			clikit_top_help(cc);
+		else if (!*cc->p)
+			(void)CLIkit_Error(cc, -1,
+			    "Found prefixes but no command\\n");
+		else {
+			i = -1;
+			LIST_FOREACH(cb, &cc->ck->branches, list) {
+				if (cb->root != NULL) {
+					if (strcmp(cc->p, cb->root))
+						continue;
+					clikit_next(cc);
+				}
+				i = cb->func(cc);
+				if (i)
+					break;
 			}
-			i = cb->func(cc);
-			if (i)
-				break;
+			if (i == 0)
+				(void)CLIkit_Error(cc, -1,
+				    "Unknown command.\\n");
 		}
-		if (i == 0)
-			(void)CLIkit_Error(cc, -1, "Unknown command.\\n");
+		if (i == -1 && cc->error != i)
+			(void)CLIkit_Error(cc, -1,
+			    "Unspecified CLI error.\\n");
 	}
-	if (i == -1 && cc->error != i)
-		(void)CLIkit_Error(cc, -1, "Unspecified CLI error.\\n");
-
 	(void)cc->puts_func(cc->puts_priv, cc->error, NULL);
 	cc->p = cc->b;
 	cc->st = sIdle;
