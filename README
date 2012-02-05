@@ -1,0 +1,66 @@
+Welcome to CLIkit
+
+This is the third generation of a facility I have used for many years,
+which makes it easy to add a CLI interface to a C program.
+
+CLI commands are described in a structured format:
+
+	LEAF foo INT {
+		# Comment2
+		desc    "state of foobar"
+		func    do_foo                  # Comment3
+		name    match_foo
+	}
+
+	LEAF bar REAL {
+		desc    "percentage of snafu"
+		func    do_bar
+	}
+
+	INSTANCE things UINT {
+		desc    "things of sorts"
+		func    things_instance
+
+		LEAF this UINT {
+			desc "what is this"
+			func do_things_this
+		}
+		LEAF that WORD INT {
+			desc "point to that"
+			func do_things_that
+		}
+
+		INSTANCE junk WORD {
+			desc "junk"
+			func junk_instance
+
+			LEAF whatchamacallit REAL {
+				desc "thingmajics"
+				func pitch_it
+			}
+		}
+	}
+
+And the python script converts this into datastructures and code, which
+handles all the tedious stuff like a "help" facility:
+
+	critter phk> ./a.out foo
+	help
+	  snafu:
+	    foo <INT>                  state of foobar
+	  foo <INT>                    state of foobar
+	  bar <REAL>                   percentage of snafu
+	  things <UINT>:               things of sorts
+	    this <UINT>                what is this
+	    that <WORD> <INT>          point to that
+	    junk <WORD>:               junk
+	      whatchamacallit <REAL>   thingmajics
+
+This newest iteration is a complete rewrite, for increased portability
+and agility, but it is not complete yet, so caveat emptor.
+
+One of the central ideas in this rewrite, is that everything is
+contained in a single python script, so that should be all you need
+to pull into your own software project.
+
+Poul-Henning
