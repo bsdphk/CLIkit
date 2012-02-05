@@ -6,6 +6,7 @@
 
 #define P_HELP		1
 #define P_SHOW		(1<<1)
+#define P_CONF		(1<<2)
 
 /*lint -esym(534, printf)*/
 
@@ -82,8 +83,9 @@ main(int argc, char **argv)
 	ck = CLIkit_New();
 	assert(ck != NULL);
 
-	assert(0 == CLIkit_Add_Prefix(ck, "help", P_HELP));
+	assert(0 == CLIkit_Add_Prefix_Recurse(ck, "help", P_HELP));
 	assert(0 == CLIkit_Add_Prefix(ck, "show", P_SHOW));
+	assert(0 == CLIkit_Add_Prefix_Recurse(ck, "conf", P_CONF));
 
 	assert(0 == CLIkit_Add_Tree(ck, clikit_match, NULL));
 	assert(0 == CLIkit_Add_Tree(ck, match_foo, "snafu"));

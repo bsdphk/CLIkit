@@ -162,6 +162,7 @@ int CLIkit_Destroy(struct clikit *);
  */
 
 int CLIkit_Add_Prefix(struct clikit *, const char *pfx, unsigned val);
+int CLIkit_Add_Prefix_Recurse(struct clikit *, const char *pfx, unsigned val);
 int CLIkit_Del_Prefix(const struct clikit *, const char *pfx);
 
 /*---------------------------------------------------------------------
@@ -342,6 +343,7 @@ struct clikit_prefix {
 	LIST_ENTRY(clikit_prefix)	list;
 	char				*pfx;
 	unsigned			val;
+	char				recurse;
 };
 
 struct clikit_context {
@@ -361,6 +363,7 @@ struct clikit_context {
 	}				st;
 	unsigned			prefix;
 	int				help;
+	int				recurse;
 
 	int				error;
 
@@ -418,8 +421,8 @@ CLIkit_Destroy(struct clikit *ck)
 
 /*********************************************************************/
 
-int
-CLIkit_Add_Prefix(struct clikit *ck, const char *pfx, unsigned val)
+static struct clikit_prefix *
+clikit_add_prefix(struct clikit *ck, const char *pfx, unsigned val)
 {
 	struct clikit_prefix *cp;
 	struct clikit_branch *cb;
@@ -428,7 +431,7 @@ CLIkit_Add_Prefix(struct clikit *ck, const char *pfx, unsigned val)
 
 	if (val == 0 && strcmp(pfx, "help")) {
 		/* Only "help" is allowed to have zero value */
-		return (-1);
+		return (NULL);
 	}
 
 	LIST_FOREACH(cp, &ck->prefixes, list) {
@@ -443,15 +446,38 @@ CLIkit_Add_Prefix(struct clikit *ck, const char *pfx, unsigned val)
 
 	cp = calloc(1L, sizeof *cp);
 	if (cp == NULL)
-		return (-1);
+		return (NULL);
 	cp->magic = CLIKIT_PREFIX_MAGIC;
 	cp->val = val;
 	cp->pfx = strdup(pfx);
 	if (cp->pfx == NULL) {
 		free(cp);
-		return (-1);
+		return (NULL);
 	}
 	LIST_INSERT_HEAD(&ck->prefixes, cp, list);
+	return (cp);
+}
+
+int
+CLIkit_Add_Prefix(struct clikit *ck, const char *pfx, unsigned val)
+{
+	struct clikit_prefix *cp;
+
+	cp = clikit_add_prefix(ck, pfx, val);
+	if (cp == NULL)
+		return (-1);
+	return (0);
+}
+
+int
+CLIkit_Add_Prefix_Recurse(struct clikit *ck, const char *pfx, unsigned val)
+{
+	struct clikit_prefix *cp;
+
+	cp = clikit_add_prefix(ck, pfx, val);
+	if (cp == NULL)
+		return (-1);
+	cp->recurse = 1;
 	return (0);
 }
 
@@ -759,6 +785,12 @@ clikit_is_prefix(struct clikit_context *cc)
 	LIST_FOREACH(cp, &cc->ck->prefixes, list) {
 		if (strcmp(cc->p, cp->pfx))
 			continue;
+		if (cc->recurse && cp->recurse) {
+			(void)CLIkit_Error(cc, -1,
+			    "Clash of incompatible prefixes\\n");
+			return (-1);
+		}
+		cc->recurse = cp->recurse;
 		cc->prefix |= cp->val;
 		return (1);
 	}
@@ -766,49 +798,61 @@ clikit_is_prefix(struct clikit_context *cc)
 }
 
 static void
-clikit_complete(struct clikit_context *cc)
+clikit_exec(struct clikit_context *cc)
 {
 	struct clikit_branch *cb;
-	int i = 0;
+	int i;
+
+	/* Terminate the list */
+	clikit_add_char(cc, 0);
+	
+	cc->p = cc->b;
+	cc->help = 0;
+	cc->prefix = 0;
+	cc->error = 0;
+	cc->recurse = 0;
+	do {
+		i = clikit_is_prefix(cc);
+		if (i == -1)
+			return;
+		if (i == 1)
+			clikit_next(cc);
+	} while (i == 1);
+	if (!*cc->p && (cc->prefix & 1))
+		clikit_top_help(cc);
+	else if (!*cc->p)
+		(void)CLIkit_Error(cc, -1,
+		    "Found prefixes but no command\\n");
+	else {
+		i = -1;
+		LIST_FOREACH(cb, &cc->ck->branches, list) {
+			if (cb->root != NULL) {
+				if (strcmp(cc->p, cb->root))
+					continue;
+				clikit_next(cc);
+			}
+			i = cb->func(cc);
+			if (i)
+				break;
+		}
+		if (i == 0)
+			(void)CLIkit_Error(cc, -1,
+			    "Unknown command.\\n");
+	}
+	if (i == -1 && cc->error != i)
+		(void)CLIkit_Error(cc, -1,
+		    "Unspecified CLI error.\\n");
+}
+
+static void
+clikit_complete(struct clikit_context *cc)
+{
 
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
 	assert(cc->ck != NULL && cc->ck->magic == CLIKIT_MAGIC);
 
-	if (cc->p != cc->b) {
-		/* Terminate the list */
-		clikit_add_char(cc, 0);
-		
-		cc->p = cc->b;
-		cc->help = 0;
-		cc->prefix = 0;
-		cc->error = 0;
-		while (clikit_is_prefix(cc))
-			clikit_next(cc);
-		if (!*cc->p && (cc->prefix & 1))
-			clikit_top_help(cc);
-		else if (!*cc->p)
-			(void)CLIkit_Error(cc, -1,
-			    "Found prefixes but no command\\n");
-		else {
-			i = -1;
-			LIST_FOREACH(cb, &cc->ck->branches, list) {
-				if (cb->root != NULL) {
-					if (strcmp(cc->p, cb->root))
-						continue;
-					clikit_next(cc);
-				}
-				i = cb->func(cc);
-				if (i)
-					break;
-			}
-			if (i == 0)
-				(void)CLIkit_Error(cc, -1,
-				    "Unknown command.\\n");
-		}
-		if (i == -1 && cc->error != i)
-			(void)CLIkit_Error(cc, -1,
-			    "Unspecified CLI error.\\n");
-	}
+	if (cc->p != cc->b)
+		clikit_exec(cc);
 	(void)cc->puts_func(cc->puts_priv, cc->error, NULL);
 	cc->p = cc->b;
 	cc->st = sIdle;
