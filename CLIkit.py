@@ -303,6 +303,12 @@ struct {								\\
 	*(elm)->field.le_prev = CKL_NEXT((elm), field);			\\
 } while (0)
 
+struct clikit_instance {
+	CKL_ENTRY(clikit_instance)	list;
+	const void			*ident;
+	void				*ptr;
+};
+
 #endif /* CLIKIT_INTERNAL */
 
 #endif /* __CLIKIT_H__ */
@@ -356,12 +362,6 @@ struct clikit_prefix {
 	char				recurse;
 };
 
-struct clikit_i_dummy {
-	CKL_ENTRY(clikit_i_dummy)	list;
-	const void			*ident;
-	void				*ptr;
-};
-
 struct clikit_context {
 	unsigned			magic;
 #define CLIKIT_CONTEXT_MAGIC		0xa70f836a
@@ -383,8 +383,8 @@ struct clikit_context {
 
 	int				error;
 
-	struct clikit_i_dummy		*cur_instance;
-	CKL_HEAD(,clikit_i_dummy)	instances;
+	struct clikit_instance		*cur_instance;
+	CKL_HEAD(,clikit_instance)	instances;
 
 	/* "Puts" handler */
 	clikit_puts_f			*puts_func;
@@ -756,7 +756,7 @@ int
 clikit_int_stdinstance(struct clikit_context *cc, clikit_recurse_f *rf,
    const char *h1, const char *h2)
 {
-	struct clikit_i_dummy *id, *id2;
+	struct clikit_instance *id, *id2;
 
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
 	assert(rf != NULL);
@@ -798,7 +798,7 @@ void
 clikit_int_findinstance(struct clikit_context *cc, void *ip, const void *ident,
     clikit_compare_f *func)
 {
-	struct clikit_i_dummy *id, *id2;
+	struct clikit_instance *id, *id2;
 	id2 = ip;
 
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
@@ -822,7 +822,7 @@ void
 clikit_int_addinstance(struct clikit_context *cc, const void *ptr,
     const void *ident, unsigned long len)
 {
-	struct clikit_i_dummy *id;
+	struct clikit_instance *id;
 	void *p;
 
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
@@ -1360,14 +1360,8 @@ def parse_instance(tl, fc, fh):
 	# Emit instance struct
 
 	ivs = "i_%d" % nr
-	fc.write("/*lint -esym(754, %s::list) */\n" % ivs)
-	fc.write("/*lint -esym(754, %s::ident) */\n" % ivs)
-	fc.write("/*lint -esym(754, le_next) */\n")
-	fc.write("/*lint -esym(754, le_prev) */\n")
 	fc.write("struct %s {\n" % ivs)
-	fc.write("\tCKL_ENTRY(%s)\tlist;\n" % ivs)
-	fc.write("\tvoid\t\t\t*ident;\n")
-	fc.write("\tvoid\t\t\t*ptr;\n")
+	fc.write("\tstruct clikit_instance	instance;\n")
 	n = 0
 	for i in al:
 		fc.write("\t%s\t\targ_%d;\n" % (types[i], n));
@@ -1479,18 +1473,18 @@ def parse_instance(tl, fc, fh):
 		fc.write('\t\treturn(-1);\n\n')
 		n += 1
 
-	fc.write("\tivs.ptr = 0;\n")
+	fc.write("\tivs.instance.ptr = 0;\n")
 	fc.write("\tclikit_int_findinstance(cc, &ivs,")
 	fc.write(" recurse_%d, compare_%d);\n" % (nr, nr))
-	fc.write("\tif (ivs.ptr == 0 &&\n")
+	fc.write("\tif (ivs.instance.ptr == 0 &&\n")
 	fc.write("\t    %s(cc" % kv['func'])
 	n = 0
 	for i in al:
 		fc.write(", ivs.arg_%d" % n)
 		n += 1
-	fc.write(", &ivs.ptr))\n")
+	fc.write(", &ivs.instance.ptr))\n")
 	fc.write("\t\treturn (-1);\n")
-	fc.write("\tassert(ivs.ptr != 0);\n")
+	fc.write("\tassert(ivs.instance.ptr != 0);\n")
 	# XXX: look for existing instance 
 	fc.write("\tclikit_int_addinstance(cc, &ivs,")
 	fc.write("\t recurse_%d, sizeof ivs);\n\n" % nr)
