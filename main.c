@@ -54,6 +54,7 @@ do_things_this(struct clikit_context *cc, unsigned a0)
 	}
 }
 
+/*lint -e{818} */
 void
 do_things_that(struct clikit_context *cc, const char *a0, int a1)
 {
@@ -67,7 +68,6 @@ do_things_that(struct clikit_context *cc, const char *a0, int a1)
 			(void)CLIkit_Printf(cc, "things %u that \"%s\" %d\n",
 			    tp->id, tp->that_0, tp->that_1);
 	} else {
-		printf("%s(%s, %d)\n", __func__, a0, a1);
 		if (tp->that_0 != NULL)
 			free(tp->that_0);
 		tp->that_0 = strdup(a0);
@@ -87,7 +87,6 @@ pitch_it(struct clikit_context *cc, double a0)
 	tp = CLIkit_Get_Instance(cc);
 	pfx = CLIkit_Get_Prefix(cc);
 	printf("In %p pfx=%x\n", tp, pfx);
-
 }
 
 int
@@ -99,6 +98,7 @@ junk_instance(struct clikit_context *cc, const char *id, unsigned id2, void **ip
 	return (0);
 }
 
+/*lint -e{818} */
 int
 things_instance(struct clikit_context *cc, unsigned id, void **ip)
 {

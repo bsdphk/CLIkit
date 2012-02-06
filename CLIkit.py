@@ -240,10 +240,10 @@ int clikit_int_stdinstance(struct clikit_context *, clikit_recurse_f *,
 
 typedef int clikit_compare_f(const void *, const void *);
 
-void clikit_int_findinstance(struct clikit_context *, void *,
+void clikit_int_findinstance(struct clikit_context *, void *, const void *,
     clikit_compare_f*);
 void clikit_int_addinstance(struct clikit_context *, const void *,
-    unsigned long);
+    const void *ident, unsigned long);
 
 """)
 	for i in types:
@@ -358,6 +358,7 @@ struct clikit_prefix {
 
 struct clikit_i_dummy {
 	CKL_ENTRY(clikit_i_dummy)	list;
+	const void			*ident;
 	void				*ptr;
 };
 
@@ -775,6 +776,8 @@ clikit_int_stdinstance(struct clikit_context *cc, clikit_recurse_f *rf,
 	/* Recursion at end of command:  Walk through all instances */
 	if (cc->recurse && clikit_int_eol(cc)) {
 		CKL_FOREACH_SAFE(id, &cc->instances, list, id2) {
+			if (id->ident != rf)
+				continue;
 			cc->cur_instance = id;
 			(void)rf(cc);
 		}
@@ -792,7 +795,7 @@ clikit_int_stdinstance(struct clikit_context *cc, clikit_recurse_f *rf,
  */
 
 void
-clikit_int_findinstance(struct clikit_context *cc, void *ip,
+clikit_int_findinstance(struct clikit_context *cc, void *ip, const void *ident,
     clikit_compare_f *func)
 {
 	struct clikit_i_dummy *id, *id2;
@@ -801,6 +804,8 @@ clikit_int_findinstance(struct clikit_context *cc, void *ip,
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
 
 	CKL_FOREACH(id, &cc->instances, list) {
+		if (id->ident != ident)
+			continue;
 		if (func(id, ip) == 0) {
 			id2->ptr = id->ptr;
 			cc->cur_instance = id;
@@ -815,7 +820,7 @@ clikit_int_findinstance(struct clikit_context *cc, void *ip,
 
 void
 clikit_int_addinstance(struct clikit_context *cc, const void *ptr,
-    unsigned long len)
+    const void *ident, unsigned long len)
 {
 	struct clikit_i_dummy *id;
 	void *p;
@@ -826,6 +831,7 @@ clikit_int_addinstance(struct clikit_context *cc, const void *ptr,
 	assert(p != 0);
 	(void)memcpy(p, ptr, len);
 	id = p;
+	id->ident = ident;
 	CKL_INSERT_HEAD(&cc->instances, id, list);
 	cc->cur_instance = id;
 }
@@ -1355,10 +1361,12 @@ def parse_instance(tl, fc, fh):
 
 	ivs = "i_%d" % nr
 	fc.write("/*lint -esym(754, %s::list) */\n" % ivs)
+	fc.write("/*lint -esym(754, %s::ident) */\n" % ivs)
 	fc.write("/*lint -esym(754, le_next) */\n")
 	fc.write("/*lint -esym(754, le_prev) */\n")
 	fc.write("struct %s {\n" % ivs)
 	fc.write("\tCKL_ENTRY(%s)\tlist;\n" % ivs)
+	fc.write("\tvoid\t\t\t*ident;\n")
 	fc.write("\tvoid\t\t\t*ptr;\n")
 	n = 0
 	for i in al:
@@ -1459,10 +1467,11 @@ def parse_instance(tl, fc, fh):
 
 	fc.write('\tif (clikit_int_match(cc, "%s"))\n\t\treturn(0);\n\n' % nm)
 
-	fc.write('\tif (clikit_int_eol(cc))\n')
-	fc.write('\tretval = clikit_int_stdinstance(cc, recurse_%d,\n' % nr)
-	fc.write('\t    \"%s\", \"%s\");\n' % (s,kv['desc']))
-	fc.write('\tif (retval)\n\t\treturn (retval);\n\n')
+	fc.write('\tif (clikit_int_eol(cc)) {\n')
+	fc.write('\t\tretval = clikit_int_stdinstance(cc, recurse_%d,\n' % nr)
+	fc.write('\t\t    \"%s\", \"%s\");\n' % (s,kv['desc']))
+	fc.write('\t\tif (retval)\n\t\t\treturn (retval);\n\n')
+	fc.write('\t}\n')
 
 	n = 0
 	for i in al:
@@ -1471,7 +1480,8 @@ def parse_instance(tl, fc, fh):
 		n += 1
 
 	fc.write("\tivs.ptr = 0;\n")
-	fc.write("\tclikit_int_findinstance(cc, &ivs, compare_%d);\n" % nr);
+	fc.write("\tclikit_int_findinstance(cc, &ivs,")
+	fc.write(" recurse_%d, compare_%d);\n" % (nr, nr))
 	fc.write("\tif (ivs.ptr == 0 &&\n")
 	fc.write("\t    %s(cc" % kv['func'])
 	n = 0
@@ -1482,7 +1492,8 @@ def parse_instance(tl, fc, fh):
 	fc.write("\t\treturn (-1);\n")
 	fc.write("\tassert(ivs.ptr != 0);\n")
 	# XXX: look for existing instance 
-	fc.write("\tclikit_int_addinstance(cc, &ivs, sizeof ivs);\n\n")
+	fc.write("\tclikit_int_addinstance(cc, &ivs,")
+	fc.write("\t recurse_%d, sizeof ivs);\n\n" % nr)
 
 	fc.write("\treturn (recurse_%d(cc));\n" % nr)
 	fc.write("}\n");
