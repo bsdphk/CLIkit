@@ -7,7 +7,7 @@ LEAF foo INT {
 	name	match_foo
 }
 
-LEAF bar REAL {
+LEAF bar REAL ENUM { day year hour minute second } {
 	desc	"percentage of snafu"
 	func	do_bar
 }

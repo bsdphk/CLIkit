@@ -23,10 +23,10 @@ do_foo(struct clikit_context *cc, int a0)
 }
 
 void
-do_bar(struct clikit_context *cc, double a0)
+do_bar(struct clikit_context *cc, double a0, const char *a1)
 {
 	(void)cc;
-	printf("%s(%g)\n", __func__, a0);
+	printf("%s(%g, %s)\n", __func__, a0, a1);
 }
 
 struct thing {
@@ -155,7 +155,7 @@ main(int argc, char **argv)
 		docmd(cc, "\nshow things\n");
 		docmd(cc, "\nconf\n");
 		docmd(cc, "\nconf things\n");
-		docmd(cc, "\nbar 3.1415\n");
+		docmd(cc, "\nbar 3.1415 day\n");
 	}
 
 	assert(0 == CLIkit_Del_Tree(ck, clikit_match, NULL));

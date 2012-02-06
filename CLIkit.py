@@ -66,8 +66,9 @@ class vtype(object):
 		return "%s(%s, %s)" % (self.func, cc, tgt)
 
 	def conv_proto(self):
-		return "int %s(struct clikit_context *cc, %s*);" % \
-		    (self.func, self.c_type)
+		s = "int " + self.func + "(struct clikit_context *, "
+		s += self.c_type + "*)"
+		return s
 
 	def compare(self, arg):
 		if self.c_type in ("double", "int", "unsigned"):
@@ -90,6 +91,42 @@ vtype("UINT", "unsigned")
 vtype("INT", "int")
 vtype("WORD", "const char *")
 
+#######################################################################
+#
+
+class vtype_enum(vtype):
+	def __init__(self, name, word_list):
+		vtype.__init__(self, name, "const char *")
+		self.wlist = word_list
+		self.func = "clikit_int_arg_enum"
+
+	def conv(self, cc, tgt):
+		return "%s(%s, %s, %s)" % (self.func, cc, tgt, self.wlist)
+
+	def conv_proto(self):
+		s = "int " + self.func + "(struct clikit_context *cc, "
+		s += self.c_type + "*,\n    const char **)"
+		return s
+
+vtype_enum("ENUM", None)
+	
+
+def parse_enum(tl, fc, fh):
+	id = "enum_%d" % len(tl)
+	assert tl.pop(0) == "ENUM"
+	assert tl.pop(0) == "{"
+	l = list()
+	while tl[0] != "}":
+		l.append(tl.pop(0))
+	assert tl.pop(0) == "}"
+	l.sort()
+	fc.write("static const char *%s[] = {\n" % id)
+	for i in l:
+		fc.write("\t\"%s\",\n" % i)
+	fc.write("};\n")
+	t = vtype_enum(id, id)
+	return id
+	
 
 #######################################################################
 #
@@ -281,7 +318,7 @@ void clikit_int_addinstance(struct clikit_context *, const void *,
 
 """)
 	for i,j in vtypes.iteritems():
-		fo.write(j.conv_proto() + "\n")
+		fo.write(j.conv_proto() + ";\n")
 	fo.write("""
 
 /********************************************************************
@@ -1223,6 +1260,11 @@ clikit_int_arg_WORD(struct clikit_context *cc, const char **arg)
 	char *p;
 
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	assert(arg != NULL);
+	if (!*cc->p) {
+		(void)CLIkit_Error(cc, -1, "Missing WORD argument\\n");
+		return (-1);
+	}
 	for (p = cc->p; *p; p++)
 		if (!isalnum(*p) && *p != '_') {
 			(void)CLIkit_Error(cc, -1, "Invalid WORD argument\\n");
@@ -1232,6 +1274,32 @@ clikit_int_arg_WORD(struct clikit_context *cc, const char **arg)
 	clikit_next(cc);
 	return (0);
 }
+
+int
+clikit_int_arg_enum(struct clikit_context *cc, const char **arg,
+    const char **wlist)
+{
+	const char **d;
+
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	assert(arg != NULL);
+	if (!*cc->p) {
+		(void)CLIkit_Error(cc, -1, "Missing ENUM argument\\n");
+		return (-1);
+	}
+	for(d = wlist; *d != NULL; d++) {
+		if (!strcmp(cc->p, *d)) {
+			*arg = cc->p;
+			clikit_next(cc);
+			return (0);
+		}
+	}
+	(void)CLIkit_Error(cc, -1, "Invalid ENUM argument, valid are:\\n");
+	for(d = wlist; *d != NULL; d++)
+		(void)CLIkit_Printf(cc, "\\t%s\\n", *d);
+	return (-1);
+}
+
 
 
 """)
@@ -1258,11 +1326,14 @@ def keyval(kv, tl, id):
 	kv[i] = tl.pop(0)
 	return True
 
-def parse_arglist(tl):
+
+def parse_arglist(tl, fc, fh):
 	tal = list()
 	while len(tl) > 0 and tl[0] != "{":
+		if tl[0] == "ENUM":
+			tl.insert(0, parse_enum(tl, fc, fh))
 		if tl[0] not in vtypes:
-			syntax("Bad type '%s' in LEAF(%s)" % (tl[0], nm))
+			syntax("Bad type '%s'" % tl[0])
 		tal.append(vtypes[tl.pop(0)])
 	return tal
 
@@ -1274,7 +1345,7 @@ def parse_leaf(tl, fc, fh):
 	fh.write("/* At token %d LEAF %s */\n" % (nr, nm))
 	fc.write("\n/* At token %d LEAF %s */\n" % (nr, nm))
 
-	tal = parse_arglist(tl)
+	tal = parse_arglist(tl, fc, fh)
 	if len(tl) == 0:
 		syntax("Missing '{' in LEAF(%s)" % nm)
 	assert tl.pop(0) == "{"
@@ -1363,7 +1434,7 @@ def parse_instance(tl, fc, fh):
 	nr = len(tl)
 	nm = tl.pop(0)
 
-	tal = parse_arglist(tl)
+	tal = parse_arglist(tl, fc, fh)
 	if len(tl) == 0:
 		syntax("Missing '{' in INSTANCE(%s)" % nm)
 	assert tl.pop(0) == "{"
