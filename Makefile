@@ -14,7 +14,7 @@ all:
 	cc -g -c -Wall -Werror test.c
 	cc -g -o a.out main.o clikit.o test.o
 	./a.out
-	flexelint -I. clikit.c main.c test.c
+	flexelint -I. clikit.c main.c test.c || true
 
 clean:
 	rm -f clikit.[ch]

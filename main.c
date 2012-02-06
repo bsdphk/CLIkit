@@ -53,7 +53,7 @@ pitch_it(struct clikit_context *cc, double a0)
 }
 
 int
-junk_instance(struct clikit_context *cc, const char *id)
+junk_instance(struct clikit_context *cc, const char *id, unsigned id2)
 {
 	(void)cc;
 	(void)id;
@@ -97,6 +97,8 @@ main(int argc, char **argv)
 
 	if (argc > 1) {
 		char buf[BUFSIZ];
+
+		printf("Ready for interactive commands...\n");
 		while (fgets(buf, (int)sizeof buf, stdin))
 			CLIkit_Input(cc, buf);
 	} else {

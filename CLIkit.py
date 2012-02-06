@@ -237,6 +237,56 @@ int clikit_int_unknown(struct clikit_context *);
 		fo.write("int clikit_int_arg_%s" % i +
 		    "(struct clikit_context *, %s*);\n" % types[i])
 	fo.write("""
+
+/********************************************************************
+ * From FreeBSD's <sys/queue.h>
+ * Copyright (c) 1991, 1993
+ *	The Regents of the University of California.  All rights reserved.
+ */
+
+#define	CKL_HEAD(name, type)						\\
+struct name {								\\
+	struct type *lh_first;	/* first element */			\\
+}
+
+#define	CKL_ENTRY(type)						\\
+struct {								\\
+	struct type *le_next;	/* next element */			\\
+	struct type **le_prev;	/* address of previous next element */	\\
+}
+
+#define	CKL_FIRST(head)	((head)->lh_first)
+
+#define	CKL_FOREACH(var, head, field)					\\
+	for ((var) = CKL_FIRST((head));				\\
+	    (var);							\\
+	    (var) = CKL_NEXT((var), field))
+
+#define	CKL_FOREACH_SAFE(var, head, field, tvar)			\\
+	for ((var) = CKL_FIRST((head));				\\
+	    (var) && ((tvar) = CKL_NEXT((var), field), 1);		\\
+	    (var) = (tvar))
+
+#define	CKL_INIT(head) do {						\\
+	CKL_FIRST((head)) = NULL;					\\
+} while (0)
+
+#define	CKL_INSERT_HEAD(head, elm, field) do {				\\
+	if ((CKL_NEXT((elm), field) = CKL_FIRST((head))) != NULL)	\\
+		CKL_FIRST((head))->field.le_prev = &CKL_NEXT((elm), field);\\
+	CKL_FIRST((head)) = (elm);					\\
+	(elm)->field.le_prev = &CKL_FIRST((head));			\\
+} while (0)
+
+#define	CKL_NEXT(elm, field)	((elm)->field.le_next)
+
+#define	CKL_REMOVE(elm, field) do {					\\
+	if (CKL_NEXT((elm), field) != NULL)				\\
+		CKL_NEXT((elm), field)->field.le_prev = 		\\
+		    (elm)->field.le_prev;				\\
+	*(elm)->field.le_prev = CKL_NEXT((elm), field);		\\
+} while (0)
+
 #endif /* CLIKIT_INTERNAL */
 
 #endif /* __CLIKIT_H__ */
@@ -260,62 +310,6 @@ int clikit_int_unknown(struct clikit_context *);
 	fo.write("#include \"%s.h\"\n" % pfx)
 	fo.write("""
 
-/********************************************************************
- * From FreeBSD's <sys/queue.h>
- * Copyright (c) 1991, 1993
- *	The Regents of the University of California.  All rights reserved.
- */
-
-/*
- * List declarations.
- */
-#define	LIST_HEAD(name, type)						\\
-struct name {								\\
-	struct type *lh_first;	/* first element */			\\
-}
-
-#define	LIST_ENTRY(type)						\\
-struct {								\\
-	struct type *le_next;	/* next element */			\\
-	struct type **le_prev;	/* address of previous next element */	\\
-}
-
-/*
- * List functions.
- */
-
-#define	LIST_FIRST(head)	((head)->lh_first)
-
-#define	LIST_FOREACH(var, head, field)					\\
-	for ((var) = LIST_FIRST((head));				\\
-	    (var);							\\
-	    (var) = LIST_NEXT((var), field))
-
-#define	LIST_FOREACH_SAFE(var, head, field, tvar)			\\
-	for ((var) = LIST_FIRST((head));				\\
-	    (var) && ((tvar) = LIST_NEXT((var), field), 1);		\\
-	    (var) = (tvar))
-
-#define	LIST_INIT(head) do {						\\
-	LIST_FIRST((head)) = NULL;					\\
-} while (0)
-
-#define	LIST_INSERT_HEAD(head, elm, field) do {				\\
-	if ((LIST_NEXT((elm), field) = LIST_FIRST((head))) != NULL)	\\
-		LIST_FIRST((head))->field.le_prev = &LIST_NEXT((elm), field);\\
-	LIST_FIRST((head)) = (elm);					\\
-	(elm)->field.le_prev = &LIST_FIRST((head));			\\
-} while (0)
-
-#define	LIST_NEXT(elm, field)	((elm)->field.le_next)
-
-#define	LIST_REMOVE(elm, field) do {					\\
-	if (LIST_NEXT((elm), field) != NULL)				\\
-		LIST_NEXT((elm), field)->field.le_prev = 		\\
-		    (elm)->field.le_prev;				\\
-	*(elm)->field.le_prev = LIST_NEXT((elm), field);		\\
-} while (0)
-
 /*********************************************************************/
 
 struct clikit_prefix;
@@ -324,15 +318,15 @@ struct clikit_branch;
 struct clikit {
 	unsigned			magic;
 #define CLIKIT_MAGIC			0x6c5315b8
-	LIST_HEAD(, clikit_branch)	branches;
-	LIST_HEAD(, clikit_prefix)	prefixes;
-	LIST_HEAD(, clikit_context)	contexts;
+	CKL_HEAD(, clikit_branch)	branches;
+	CKL_HEAD(, clikit_prefix)	prefixes;
+	CKL_HEAD(, clikit_context)	contexts;
 };
 
 struct clikit_branch {
 	unsigned			magic;
 #define CLIKIT_BRANCH_MAGIC		0x21031be5
-	LIST_ENTRY(clikit_branch)	list;
+	CKL_ENTRY(clikit_branch)	list;
 	clikit_match_f			*func;
 	char				*root;
 };
@@ -340,7 +334,7 @@ struct clikit_branch {
 struct clikit_prefix {
 	unsigned			magic;
 #define CLIKIT_PREFIX_MAGIC		0xb793beea
-	LIST_ENTRY(clikit_prefix)	list;
+	CKL_ENTRY(clikit_prefix)	list;
 	char				*pfx;
 	unsigned			val;
 	char				recurse;
@@ -350,7 +344,7 @@ struct clikit_context {
 	unsigned			magic;
 #define CLIKIT_CONTEXT_MAGIC		0xa70f836a
 	struct clikit			*ck;
-	LIST_ENTRY(clikit_context)	list;
+	CKL_ENTRY(clikit_context)	list;
 	char				*b;
 	char				*e;
 	char				*p;
@@ -384,9 +378,9 @@ CLIkit_New(void)
 	if (ck == NULL)
 		return (ck);
 	ck->magic = CLIKIT_MAGIC;
-	LIST_INIT(&ck->branches);
-	LIST_INIT(&ck->prefixes);
-	LIST_INIT(&ck->contexts);
+	CKL_INIT(&ck->branches);
+	CKL_INIT(&ck->prefixes);
+	CKL_INIT(&ck->contexts);
 	return (ck);
 }
 
@@ -400,17 +394,17 @@ CLIkit_Destroy(struct clikit *ck)
 
 	assert(ck != NULL && ck->magic == CLIKIT_MAGIC);
 
-	LIST_FOREACH_SAFE(cc, &ck->contexts, list, cc2) {
+	CKL_FOREACH_SAFE(cc, &ck->contexts, list, cc2) {
 		assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
 		retval |= CLIkit_Destroy_Context(cc);
 	}
 		
-	LIST_FOREACH_SAFE(cb, &ck->branches, list, cb2) {
+	CKL_FOREACH_SAFE(cb, &ck->branches, list, cb2) {
 		assert(cb != NULL && cb->magic == CLIKIT_BRANCH_MAGIC);
 		retval |= CLIkit_Del_Tree(ck, cb->func, cb->root);
 	}
 		
-	LIST_FOREACH_SAFE(cp, &ck->prefixes, list, cp2) {
+	CKL_FOREACH_SAFE(cp, &ck->prefixes, list, cp2) {
 		assert(cp != NULL && cp->magic == CLIKIT_PREFIX_MAGIC);
 		retval |= CLIkit_Del_Prefix(ck, cp->pfx);
 	}
@@ -434,12 +428,12 @@ clikit_add_prefix(struct clikit *ck, const char *pfx, unsigned val)
 		return (NULL);
 	}
 
-	LIST_FOREACH(cp, &ck->prefixes, list) {
+	CKL_FOREACH(cp, &ck->prefixes, list) {
 		/* XXX: return -1 + errno */
 		assert(strcmp(cp->pfx, pfx));
 		assert(cp->val != val);
 	}
-	LIST_FOREACH(cb, &ck->branches, list) {
+	CKL_FOREACH(cb, &ck->branches, list) {
 		/* XXX: return -1 + errno */
 		assert(cb->root == NULL || strcmp(cb->root, pfx));
 	}
@@ -454,7 +448,7 @@ clikit_add_prefix(struct clikit *ck, const char *pfx, unsigned val)
 		free(cp);
 		return (NULL);
 	}
-	LIST_INSERT_HEAD(&ck->prefixes, cp, list);
+	CKL_INSERT_HEAD(&ck->prefixes, cp, list);
 	return (cp);
 }
 
@@ -487,10 +481,10 @@ CLIkit_Del_Prefix(const struct clikit *ck, const char *pfx)
 	struct clikit_prefix *cp;
 	
 	assert(ck != NULL && ck->magic == CLIKIT_MAGIC);
-	LIST_FOREACH(cp, &ck->prefixes, list) {
+	CKL_FOREACH(cp, &ck->prefixes, list) {
 		assert(cp != NULL && cp->magic == CLIKIT_PREFIX_MAGIC);
 		if (!strcmp(cp->pfx, pfx)) {
-			LIST_REMOVE(cp, list);
+			CKL_REMOVE(cp, list);
 			free(cp->pfx);
 			free(cp);
 			return (0);
@@ -511,9 +505,9 @@ CLIkit_Add_Tree(struct clikit *ck, clikit_match_f *func,
 	assert(ck != NULL && ck->magic == CLIKIT_MAGIC);
 
 	if (root != NULL) {
-		LIST_FOREACH(cp, &ck->prefixes, list)
+		CKL_FOREACH(cp, &ck->prefixes, list)
 			assert(strcmp(cp->pfx, root));
-		LIST_FOREACH(cb, &ck->branches, list)
+		CKL_FOREACH(cb, &ck->branches, list)
 			assert(cb->root == NULL || strcmp(cb->root, root));
 	}
 	cb = calloc(1L, sizeof *cb);
@@ -528,7 +522,7 @@ CLIkit_Add_Tree(struct clikit *ck, clikit_match_f *func,
 			return (-1);
 		}
 	}
-	LIST_INSERT_HEAD(&ck->branches, cb, list);
+	CKL_INSERT_HEAD(&ck->branches, cb, list);
 	return (0);
 }
 
@@ -539,7 +533,7 @@ CLIkit_Del_Tree(const struct clikit *ck, clikit_match_f *func,
 	struct clikit_branch *cb;
 	
 	assert(ck != NULL && ck->magic == CLIKIT_MAGIC);
-	LIST_FOREACH(cb, &ck->branches, list) {
+	CKL_FOREACH(cb, &ck->branches, list) {
 		assert(cb != NULL && cb->magic == CLIKIT_BRANCH_MAGIC);
 		if (cb->func != func)
 			continue;
@@ -550,7 +544,7 @@ CLIkit_Del_Tree(const struct clikit *ck, clikit_match_f *func,
 		else if (strcmp(cb->root, root)) 
 			continue;
 
-		LIST_REMOVE(cb, list);
+		CKL_REMOVE(cb, list);
 		free(cb->root);
 		free(cb);
 		return (0);
@@ -580,7 +574,7 @@ CLIkit_New_Context(struct clikit *ck)
 	cc->e = cc->b + 64;
 	cc->p = cc->b;
 	cc->st = sIdle;
-	LIST_INSERT_HEAD(&ck->contexts, cc, list);
+	CKL_INSERT_HEAD(&ck->contexts, cc, list);
 
 	CLIkit_Set_Puts(cc, NULL, NULL);
 	return (cc);
@@ -594,7 +588,7 @@ CLIkit_Destroy_Context(struct clikit_context *cc)
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
 	ck = cc->ck;
 	assert(ck != NULL && ck->magic == CLIKIT_MAGIC);
-	LIST_REMOVE(cc, list);
+	CKL_REMOVE(cc, list);
 	(void)memset(cc, 0, sizeof *cc);
 	free(cc);
 	return (0);
@@ -750,7 +744,7 @@ clikit_top_help(struct clikit_context *cc)
 	struct clikit_branch *cb;
 
 	cc->help = 1;
-	LIST_FOREACH(cb, &cc->ck->branches, list) {
+	CKL_FOREACH(cb, &cc->ck->branches, list) {
 		if (cb->root) {
 			(void)CLIkit_Printf(cc, "%*s%s:\\n",
 			    cc->help * 2, "", cb->root);
@@ -782,7 +776,7 @@ clikit_is_prefix(struct clikit_context *cc)
 
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
 	assert(cc->ck != NULL && cc->ck->magic == CLIKIT_MAGIC);
-	LIST_FOREACH(cp, &cc->ck->prefixes, list) {
+	CKL_FOREACH(cp, &cc->ck->prefixes, list) {
 		if (strcmp(cc->p, cp->pfx))
 			continue;
 		if (cc->recurse && cp->recurse) {
@@ -825,7 +819,7 @@ clikit_exec(struct clikit_context *cc)
 		    "Found prefixes but no command\\n");
 	else {
 		i = -1;
-		LIST_FOREACH(cb, &cc->ck->branches, list) {
+		CKL_FOREACH(cb, &cc->ck->branches, list) {
 			if (cb->root != NULL) {
 				if (strcmp(cc->p, cb->root))
 					continue;
@@ -1227,6 +1221,17 @@ def parse_instance(tl, fc, fh):
 
 	fh.write("/* At token %d INSTANCE %s */\n" % (nr, nm))
 	fc.write("\n/* At token %d INSTANCE %s */\n" % (nr, nm))
+
+	fc.write("struct i_%s {\n" % nm)
+	fc.write("\tCKL_ENTRY(i_%s)\tlist;\n" % nm)
+	n = 0
+	for i in al:
+		fc.write("\t%s\t\targ_%d;\n" % (types[i], n));
+		n += 1
+	fc.write("\tvoid\t\t\t*ptr;\n")
+	fc.write("};\n\n")
+
+	# XXX: emit sorting function
 
 	if kv['desc'] == None:
 		kv['desc'] = "(no description)"

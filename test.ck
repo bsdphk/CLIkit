@@ -25,7 +25,7 @@ INSTANCE things UINT {
 		func do_things_that
 	}
 
-	INSTANCE junk WORD {
+	INSTANCE junk WORD UINT {
 		desc "junk"
 		func junk_instance
 
