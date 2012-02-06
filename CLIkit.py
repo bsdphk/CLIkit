@@ -229,8 +229,8 @@ int clikit_int_tophelp(const struct clikit_context *, const char *,
     const char *);
 void clikit_int_tophelplevel(struct clikit_context *, int);
 int clikit_int_eol(const struct clikit_context *);
-void clikit_int_push_instance(struct clikit_context *);
-void clikit_int_pop_instance(struct clikit_context *);
+// void clikit_int_push_instance(struct clikit_context *);
+// void clikit_int_pop_instance(struct clikit_context *);
 int clikit_int_unknown(struct clikit_context *);
 """)
 	for i in types:
@@ -965,6 +965,7 @@ clikit_int_eol(const struct clikit_context *cc)
 	return (0);
 }
 
+#if 0
 void
 clikit_int_push_instance(struct clikit_context *cc)
 {
@@ -978,13 +979,13 @@ clikit_int_pop_instance(struct clikit_context *cc)
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
 	(void)printf("%s()\\n", __func__);
 }
+#endif
 
 int
 clikit_int_unknown(struct clikit_context *cc)
 {
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
-	(void)printf("%s()\\n", __func__);
-	return (-1);
+	return (CLIkit_Error(cc, -1, "Unknown command\\n"));
 }
 
 int
@@ -1222,17 +1223,37 @@ def parse_instance(tl, fc, fh):
 	fh.write("/* At token %d INSTANCE %s */\n" % (nr, nm))
 	fc.write("\n/* At token %d INSTANCE %s */\n" % (nr, nm))
 
-	ivs = "i_%s_%d" % (nm, nr)
+	# Emit instance struct
+	ivs = "i_%d" % nr
 	fc.write("struct %s {\n" % ivs)
-	fc.write("\tCKL_ENTRY(%s)\tlist;\n" % ivs)
+	#fc.write("\tCKL_ENTRY(%s)\tlist;\n" % ivs)
 	n = 0
 	for i in al:
 		fc.write("\t%s\t\targ_%d;\n" % (types[i], n));
 		n += 1
-	fc.write("\tvoid\t\t\t*ptr;\n")
+	#fc.write("\tvoid\t\t\t*ptr;\n")
 	fc.write("};\n\n")
 
 	# XXX: emit sorting function
+
+	# Emit recurse_function
+	fc.write("static int\n")
+	fc.write("recurse_%d(struct clikit_context *cc)\n" % nr)
+	fc.write("{\n")
+	fc.write("\tint retval;\n")
+	fc.write("\n")
+	s = ""
+	for i in children:
+		print(i)
+		fc.write("\t" + s)
+		fc.write("if ((retval = %s(cc)) != 0) /*lint !e838*/\n" % i)
+		fc.write("\t\t;\n")
+		s = "else "
+	fc.write("\telse\n")
+	fc.write("\t\tretval = clikit_int_unknown(cc);\n")
+	fc.write("\treturn (retval);\n")
+	fc.write("}\n");
+	fc.write("\n");
 
 	if kv['desc'] == None:
 		kv['desc'] = "(no description)"
@@ -1284,7 +1305,6 @@ def parse_instance(tl, fc, fh):
 		fc.write('\tif (clikit_int_arg_%s(cc, &ivs.arg_%d))\n' % (i, n))
 		fc.write('\t\treturn(-1);\n')
 		n += 1
-	fc.write("\tclikit_int_push_instance(cc);\n")
 	fc.write("\tif (%s(cc" % kv['func'])
 	n = 0
 	for i in al:
@@ -1294,17 +1314,20 @@ def parse_instance(tl, fc, fh):
 	fc.write("\t\tretval = -1;\n")
 	fc.write('\telse if (clikit_int_eol(cc))\n')
 	fc.write("\t\tretval = 1;\n")
-	s = ""
-	for i in children:
-		print(i)
-		fc.write("\t" + s)
-		fc.write("if ((retval = %s(cc)) != 0) /*lint !e838*/\n" % i)
-		fc.write("\t\t;\n")
-		s = "else "
-	fc.write("\telse\n")
-	fc.write("\t\tretval = clikit_int_unknown(cc);\n")
-	fc.write("\tclikit_int_pop_instance(cc);\n")
-	fc.write("\treturn (retval);\n")
+	if False:
+		s = ""
+		for i in children:
+			print(i)
+			fc.write("\t" + s)
+			fc.write("if ((retval = %s(cc)) != 0) /*lint !e838*/\n" % i)
+			fc.write("\t\t;\n")
+			s = "else "
+		fc.write("\telse\n")
+		fc.write("\t\tretval = clikit_int_unknown(cc);\n")
+		fc.write("\tclikit_int_pop_instance(cc);\n")
+		fc.write("\treturn (retval);\n")
+	else:
+		fc.write("\treturn (recurse_%d(cc));\n" % nr)
 	fc.write("}\n");
 
 	return kv['name']

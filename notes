@@ -1,5 +1,36 @@
 Mon Jan 30 18:53:16 UTC 2012
 
+	generated instance match:
+
+		struct ... ivs;
+
+		if eol && prefix_recurse
+			foreach ivs
+				recurse(ivs)
+			return
+
+		if eol && pfx=help:
+			recurse(NULL)
+			return
+
+		if eol
+			error
+
+		fill ivs from args
+		error if insufficient args
+		look up ivs
+		if not found
+			ptr = $func
+			if ptr == NULL
+				error
+			insert new ivs
+		recurse(ivs)
+
+	in above "recurse" == do_BRANCH
+				
+
+Mon Jan 30 18:53:16 UTC 2012
+
 	static int
 	match_foo(struct clikit_context *cc)
 	{

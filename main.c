@@ -57,7 +57,7 @@ junk_instance(struct clikit_context *cc, const char *id, unsigned id2)
 {
 	(void)cc;
 	(void)id;
-	printf("%s(%s)\n", __func__, id);
+	printf("%s(%s, %u)\n", __func__, id, id2);
 	return (0);
 }
 
@@ -66,10 +66,9 @@ things_instance(struct clikit_context *cc, unsigned id)
 {
 	(void)cc;
 	(void)id;
-	printf("%s(%u)\n", __func__, id);
+	printf("%s(pfx=%x, %u)\n", __func__, CLIkit_Get_Prefix(cc), id);
 	return (0);
 }
-
 
 int
 main(int argc, char **argv)
