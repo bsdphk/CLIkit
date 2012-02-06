@@ -1222,8 +1222,9 @@ def parse_instance(tl, fc, fh):
 	fh.write("/* At token %d INSTANCE %s */\n" % (nr, nm))
 	fc.write("\n/* At token %d INSTANCE %s */\n" % (nr, nm))
 
-	fc.write("struct i_%s {\n" % nm)
-	fc.write("\tCKL_ENTRY(i_%s)\tlist;\n" % nm)
+	ivs = "i_%s_%d" % (nm, nr)
+	fc.write("struct %s {\n" % ivs)
+	fc.write("\tCKL_ENTRY(%s)\tlist;\n" % ivs)
 	n = 0
 	for i in al:
 		fc.write("\t%s\t\targ_%d;\n" % (types[i], n));
@@ -1257,10 +1258,7 @@ def parse_instance(tl, fc, fh):
 	fc.write(static + "int\n%s(struct clikit_context *cc)\n" % kv['name'])
 	fc.write('{\n')
 	fc.write('\tint retval;\n')
-	n = 0
-	for i in al:
-		fc.write("\t%s arg_%d;\n" % (types[i], n))
-		n += 1
+	fc.write('\tstruct %s ivs;\n' % ivs)
 	fc.write("\n")	
 
 	s = ""
@@ -1283,14 +1281,14 @@ def parse_instance(tl, fc, fh):
 		
 	n = 0
 	for i in al:
-		fc.write('\tif (clikit_int_arg_%s(cc, &arg_%d))\n' % (i, n))
+		fc.write('\tif (clikit_int_arg_%s(cc, &ivs.arg_%d))\n' % (i, n))
 		fc.write('\t\treturn(-1);\n')
 		n += 1
 	fc.write("\tclikit_int_push_instance(cc);\n")
 	fc.write("\tif (%s(cc" % kv['func'])
 	n = 0
 	for i in al:
-		fc.write(", arg_%d" % n)
+		fc.write(", ivs.arg_%d" % n)
 		n += 1
 	fc.write("))\n")
 	fc.write("\t\tretval = -1;\n")
