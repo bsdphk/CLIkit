@@ -50,12 +50,46 @@ import os
 #######################################################################
 #
 
-types = {
-	'REAL':	"double",
-	'UINT':	"unsigned",
-	'INT':	"int",
-	'WORD':	"const char *",
-}
+vtypes = dict()
+
+class vtype(object):
+	def __init__(self, name, ctype):
+		self.name = name;
+		self.c_type = ctype
+		self.func = "clikit_int_arg_" + self.name
+		vtypes[name] = self
+
+	def ctype(self):
+		return self.c_type
+
+	def conv(self, cc, tgt):
+		return "%s(%s, %s)" % (self.func, cc, tgt)
+
+	def conv_proto(self):
+		return "int %s(struct clikit_context *cc, %s*);" % \
+		    (self.func, self.c_type)
+
+	def compare(self, arg):
+		if self.c_type in ("double", "int", "unsigned"):
+			s = "\tif (a->%s > b->%s)\n" % (arg, arg)
+			s += "\t\treturn (1);\n"
+			s += "\tif (a->%s < b->%s)\n" % (arg, arg)
+			s += "\t\treturn (-1);\n"
+			return s
+		if self.c_type == "const char *":
+			s = "\t{\n"
+			s += "\tint i = strcmp(a->%s, a->%s);\n" % (arg, arg)
+			s += "\tif (i != 0)\n"
+			s += "\t\treturn(i);\n"
+			s += "\t}\n"
+			return (s)
+		assert "Missing" == "Vtype compare function"
+
+vtype("REAL", "double")
+vtype("UINT", "unsigned")
+vtype("INT", "int")
+vtype("WORD", "const char *")
+
 
 #######################################################################
 #
@@ -246,9 +280,8 @@ void clikit_int_addinstance(struct clikit_context *, const void *,
     const void *ident, unsigned long);
 
 """)
-	for i in types:
-		fo.write("int clikit_int_arg_%s" % i +
-		    "(struct clikit_context *, %s*);\n" % types[i])
+	for i,j in vtypes.iteritems():
+		fo.write(j.conv_proto() + "\n")
 	fo.write("""
 
 /********************************************************************
@@ -1225,6 +1258,14 @@ def keyval(kv, tl, id):
 	kv[i] = tl.pop(0)
 	return True
 
+def parse_arglist(tl):
+	tal = list()
+	while len(tl) > 0 and tl[0] != "{":
+		if tl[0] not in vtypes:
+			syntax("Bad type '%s' in LEAF(%s)" % (tl[0], nm))
+		tal.append(vtypes[tl.pop(0)])
+	return tal
+
 def parse_leaf(tl, fc, fh):
 	assert tl.pop(0) == "LEAF"
 	nr = len(tl)
@@ -1233,11 +1274,7 @@ def parse_leaf(tl, fc, fh):
 	fh.write("/* At token %d LEAF %s */\n" % (nr, nm))
 	fc.write("\n/* At token %d LEAF %s */\n" % (nr, nm))
 
-	al = list()
-	while len(tl) > 0 and tl[0] != "{":
-		if tl[0] not in types:
-			syntax("Bad type '%s' in LEAF(%s)" % (tl[0], nm))
-		al.append(tl.pop(0))
+	tal = parse_arglist(tl)
 	if len(tl) == 0:
 		syntax("Missing '{' in LEAF(%s)" % nm)
 	assert tl.pop(0) == "{"
@@ -1267,23 +1304,23 @@ def parse_leaf(tl, fc, fh):
 	if kv['func'] == None:
 		syntax("Missing 'func' in LEAF(%s)" % nm)
 
-	print("Leaf(%d, %s)" % (nr, nm), al, kv)
+	print("Leaf(%d, %s)" % (nr, nm), tal, kv)
 
 	fh.write("void %s(struct clikit_context *" % kv["func"])
-	for i in al:
-		fh.write(", %s" % types[i]);
+	for i in tal:
+		fh.write(", " + i.ctype())
 	fh.write(");\n\n")
 
 	fc.write(static + "int\n%s(struct clikit_context *cc)\n" % kv['name'])
 	fc.write('{\n')
 	n = 0
-	for i in al:
-		fc.write("\t%s arg_%d = 0;\n" % (types[i], n))
+	for i in tal:
+		fc.write("\t%s arg_%d = 0;\n" % (i.ctype(), n))
 		n += 1
 	fc.write("\n")	
 	s = ''
-	for i in al:
-		s += " <" + i + ">"
+	for i in tal:
+		s += " <" + i.name + ">"
 	fc.write('\tif (clikit_int_tophelp(cc, "%s%s", "%s"))\n' %
 		(nm, s, kv['desc']))
 	fc.write('\t\treturn(0);\n')
@@ -1291,7 +1328,7 @@ def parse_leaf(tl, fc, fh):
 	fc.write('\tif (clikit_int_eol(cc) && clikit_int_recurse(cc)) {\n')
 	fc.write('\t\t%s(cc' % kv['func'])
 	n = 0
-	for i in al:
+	for i in tal:
 		fc.write(", arg_%d" % n)
 		n += 1
 	fc.write(");\n")
@@ -1304,14 +1341,14 @@ def parse_leaf(tl, fc, fh):
 	fc.write('\t\treturn(1);\n')
 
 	n = 0
-	for i in al:
-		fc.write('\tif (clikit_int_arg_%s(cc, &arg_%d))\n' % (i, n))
+	for i in tal:
+		fc.write('\tif (%s)\n' % i.conv("cc", "&arg_%d" % n))
 		fc.write('\t\treturn(-1);\n')
 		n += 1
 	fc.write('\tif (!clikit_int_eol(cc))\n\t\treturn(-1);\n')
 	fc.write('\t%s(cc' % kv['func'])
 	n = 0
-	for i in al:
+	for i in tal:
 		fc.write(", arg_%d" % n)
 		n += 1
 	fc.write(");\n")
@@ -1326,15 +1363,11 @@ def parse_instance(tl, fc, fh):
 	nr = len(tl)
 	nm = tl.pop(0)
 
-	al = list()
-	children = list()
-	while len(tl) > 0 and tl[0] != "{":
-		if tl[0] not in types:
-			syntax("Bad type '%s' in LEAF(%s)" % (tl[0], nm))
-		al.append(tl.pop(0))
+	tal = parse_arglist(tl)
 	if len(tl) == 0:
 		syntax("Missing '{' in INSTANCE(%s)" % nm)
 	assert tl.pop(0) == "{"
+	children = list()
 	kv = {
 		"desc":	None,
 		"func": None,
@@ -1363,8 +1396,8 @@ def parse_instance(tl, fc, fh):
 	fc.write("struct %s {\n" % ivs)
 	fc.write("\tstruct clikit_instance	instance;\n")
 	n = 0
-	for i in al:
-		fc.write("\t%s\t\targ_%d;\n" % (types[i], n));
+	for i in tal:
+		fc.write("\t%s\t\targ_%d;\n" % (i.ctype(), n));
 		n += 1
 	fc.write("};\n\n")
 
@@ -1378,21 +1411,9 @@ def parse_instance(tl, fc, fh):
 	fc.write("\tconst struct %s *b = bb;\n" % ivs)
 	fc.write("\t\n")
 	n = 0
-	for i in al:
-		if i == "UINT" or i == "REAL" or i == "INT":
-			fc.write("\tif (a->arg_%d > b->arg_%d)\n" % (n, n))
-			fc.write("\t\treturn (1);\n")
-			fc.write("\tif (a->arg_%d < b->arg_%d)\n" % (n, n))
-			fc.write("\t\treturn (-1);\n")
-		elif i == "WORD" or i == "STRING":
-			fc.write("\t{\n")
-			fc.write("\tint i = strcmp(a->arg_%d, a->arg_%d);\n"
-			    % (n, n))
-			fc.write("\tif (i != 0)\n")
-			fc.write("\t\treturn(i);\n")
-			fc.write("\t}\n")
-		else:
-			assert i == "Unhandled type"
+	for i in tal:
+		fc.write(i.compare("arg_%d" % n))
+		n += 1
 	fc.write("\treturn(0);\n")
 	fc.write("}\n\n")
 
@@ -1428,8 +1449,8 @@ def parse_instance(tl, fc, fh):
 		syntax("Missing 'func' in LEAF(%s)" % nm)
 
 	fh.write("int %s(struct clikit_context *" % kv["func"])
-	for i in al:
-		fh.write(", %s" % types[i]);
+	for i in tal:
+		fh.write(", %s" % i.ctype());
 	fh.write(", void **);\n\n")
 
 	###############################################################
@@ -1451,8 +1472,8 @@ def parse_instance(tl, fc, fh):
 	fc.write("\n")	
 
 	s = nm
-	for i in al:
-		s += " <" + i + ">"
+	for i in tal:
+		s += " <" + i.name + ">"
 	s += ":"
 
 	fc.write('\tretval = clikit_int_stdinstance(cc, recurse_%d,\n' % nr)
@@ -1468,8 +1489,8 @@ def parse_instance(tl, fc, fh):
 	fc.write('\t}\n')
 
 	n = 0
-	for i in al:
-		fc.write('\tif (clikit_int_arg_%s(cc, &ivs.arg_%d))\n' % (i, n))
+	for i in tal:
+		fc.write('\tif (%s)\n' % i.conv("cc", "&ivs.arg_%d" % n))
 		fc.write('\t\treturn(-1);\n\n')
 		n += 1
 
@@ -1479,7 +1500,7 @@ def parse_instance(tl, fc, fh):
 	fc.write("\tif (ivs.instance.ptr == 0 &&\n")
 	fc.write("\t    %s(cc" % kv['func'])
 	n = 0
-	for i in al:
+	for i in tal:
 		fc.write(", ivs.arg_%d" % n)
 		n += 1
 	fc.write(", &ivs.instance.ptr))\n")
