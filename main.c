@@ -1,5 +1,7 @@
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "clikit.h"
 #include "test.h"
@@ -27,47 +29,94 @@ do_bar(struct clikit_context *cc, double a0)
 	printf("%s(%g)\n", __func__, a0);
 }
 
+struct thing {
+	unsigned	id;
+	unsigned	this;
+	char		*that_0;
+	int		that_1;
+};
+
+/*lint -e{818} */
 void
 do_things_this(struct clikit_context *cc, unsigned a0)
 {
-	(void)cc;
-	(void)a0;
-	printf("%s(%u)\n", __func__, a0);
+	struct thing *tp;
+	unsigned pfx;
+
+	tp = CLIkit_Get_Instance(cc);
+	pfx = CLIkit_Get_Prefix(cc);
+
+	if (pfx == P_CONF) {
+		(void)CLIkit_Printf(cc, "things %u this %u\n",
+		    tp->id, tp->this);
+	} else {
+		tp->this = a0;
+	}
 }
 
 void
 do_things_that(struct clikit_context *cc, const char *a0, int a1)
 {
-	(void)cc;
-	(void)a0;
-	(void)a1;
-	printf("%s(%s, %d)\n", __func__, a0, a1);
+	struct thing *tp;
+	unsigned pfx;
+
+	tp = CLIkit_Get_Instance(cc);
+	pfx = CLIkit_Get_Prefix(cc);
+	if (pfx == P_CONF) {
+		if (tp->that_0 != NULL) 
+			(void)CLIkit_Printf(cc, "things %u that \"%s\" %d\n",
+			    tp->id, tp->that_0, tp->that_1);
+	} else {
+		printf("%s(%s, %d)\n", __func__, a0, a1);
+		if (tp->that_0 != NULL)
+			free(tp->that_0);
+		tp->that_0 = strdup(a0);
+		assert(tp->that_0);
+		tp->that_1 = a1;
+	}
 }
 
 void
 pitch_it(struct clikit_context *cc, double a0)
 {
+	struct thing *tp;
+	unsigned pfx;
 	(void)cc;
 	(void)a0;
 	printf("%s(%g)\n", __func__, a0);
+	tp = CLIkit_Get_Instance(cc);
+	pfx = CLIkit_Get_Prefix(cc);
+	printf("In %p pfx=%x\n", tp, pfx);
+
 }
 
 int
-junk_instance(struct clikit_context *cc, const char *id, unsigned id2)
+junk_instance(struct clikit_context *cc, const char *id, unsigned id2, void **ip)
 {
 	(void)cc;
-	(void)id;
+	(void)ip;
 	printf("%s(%s, %u)\n", __func__, id, id2);
 	return (0);
 }
 
 int
-things_instance(struct clikit_context *cc, unsigned id)
+things_instance(struct clikit_context *cc, unsigned id, void **ip)
 {
-	(void)cc;
-	(void)id;
+	struct thing *tp;
+
 	printf("%s(pfx=%x, %u)\n", __func__, CLIkit_Get_Prefix(cc), id);
+	tp = calloc(1L, sizeof *tp);
+	assert(tp);
+	tp->id = id;
+	*ip = tp;
 	return (0);
+}
+
+static void
+docmd(struct clikit_context *cc, const char *s)
+{
+	printf(">>> %s\n", s);
+	CLIkit_Input(cc, s);
 }
 
 int
@@ -82,7 +131,7 @@ main(int argc, char **argv)
 	ck = CLIkit_New();
 	assert(ck != NULL);
 
-	assert(0 == CLIkit_Add_Prefix_Recurse(ck, "help", P_HELP));
+	assert(0 == CLIkit_Add_Prefix(ck, "help", P_HELP));
 	assert(0 == CLIkit_Add_Prefix(ck, "show", P_SHOW));
 	assert(0 == CLIkit_Add_Prefix_Recurse(ck, "conf", P_CONF));
 
@@ -99,11 +148,14 @@ main(int argc, char **argv)
 
 		printf("Ready for interactive commands...\n");
 		while (fgets(buf, (int)sizeof buf, stdin))
-			CLIkit_Input(cc, buf);
+			docmd(cc, buf);
 	} else {
-		CLIkit_Input(cc, "\n\n# Comment\nfoo\nthings 0 this 3\n");
-		CLIkit_Input(cc, "\nthings 1 that \"foobar\" -3\n");
-		CLIkit_Input(cc, "\nbar 3.1415\n");
+		docmd(cc, "\n\n# Comment\nfoo\nthings 0 this 3\n");
+		docmd(cc, "\nthings 1 that \"foobar\" -3\n");
+		docmd(cc, "\nshow things\n");
+		docmd(cc, "\nconf\n");
+		docmd(cc, "\nconf things\n");
+		docmd(cc, "\nbar 3.1415\n");
 	}
 
 	assert(0 == CLIkit_Del_Tree(ck, clikit_match, NULL));

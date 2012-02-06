@@ -217,6 +217,7 @@ int CLIkit_Error(struct clikit_context *, int error, const char *fmt, ...);
 int CLIkit_Puts(const struct clikit_context *, const char *str);
 int CLIkit_Printf(const struct clikit_context *, const char *fmt, ...);
 unsigned CLIkit_Get_Prefix(const struct clikit_context *);
+void *CLIkit_Get_Instance(const struct clikit_context *);
 
 #ifdef CLIKIT_INTERNAL
 /*
@@ -227,11 +228,23 @@ int clikit_int_match(struct clikit_context *, const char *);
 int clikit_int_help(const struct clikit_context *, const char *);
 int clikit_int_tophelp(const struct clikit_context *, const char *,
     const char *);
-void clikit_int_tophelplevel(struct clikit_context *, int);
 int clikit_int_eol(const struct clikit_context *);
+int clikit_int_recurse(const struct clikit_context *);
 // void clikit_int_push_instance(struct clikit_context *);
 // void clikit_int_pop_instance(struct clikit_context *);
 int clikit_int_unknown(struct clikit_context *);
+
+typedef int clikit_recurse_f(struct clikit_context *);
+int clikit_int_stdinstance(struct clikit_context *, clikit_recurse_f *,
+    const char *, const char *);
+
+typedef int clikit_compare_f(const void *, const void *);
+
+void clikit_int_findinstance(struct clikit_context *, void *,
+    clikit_compare_f*);
+void clikit_int_addinstance(struct clikit_context *, const void *,
+    unsigned long);
+
 """)
 	for i in types:
 		fo.write("int clikit_int_arg_%s" % i +
@@ -249,7 +262,7 @@ struct name {								\\
 	struct type *lh_first;	/* first element */			\\
 }
 
-#define	CKL_ENTRY(type)						\\
+#define	CKL_ENTRY(type)							\\
 struct {								\\
 	struct type *le_next;	/* next element */			\\
 	struct type **le_prev;	/* address of previous next element */	\\
@@ -258,14 +271,17 @@ struct {								\\
 #define	CKL_FIRST(head)	((head)->lh_first)
 
 #define	CKL_FOREACH(var, head, field)					\\
-	for ((var) = CKL_FIRST((head));				\\
+	for ((var) = CKL_FIRST((head));					\\
 	    (var);							\\
 	    (var) = CKL_NEXT((var), field))
 
+/*lint -emacro(506, CKL_FOREACH_SAFE) */
+
 #define	CKL_FOREACH_SAFE(var, head, field, tvar)			\\
-	for ((var) = CKL_FIRST((head));				\\
+	for ((var) = CKL_FIRST((head));					\\
 	    (var) && ((tvar) = CKL_NEXT((var), field), 1);		\\
 	    (var) = (tvar))
+
 
 #define	CKL_INIT(head) do {						\\
 	CKL_FIRST((head)) = NULL;					\\
@@ -284,7 +300,7 @@ struct {								\\
 	if (CKL_NEXT((elm), field) != NULL)				\\
 		CKL_NEXT((elm), field)->field.le_prev = 		\\
 		    (elm)->field.le_prev;				\\
-	*(elm)->field.le_prev = CKL_NEXT((elm), field);		\\
+	*(elm)->field.le_prev = CKL_NEXT((elm), field);			\\
 } while (0)
 
 #endif /* CLIKIT_INTERNAL */
@@ -340,6 +356,11 @@ struct clikit_prefix {
 	char				recurse;
 };
 
+struct clikit_i_dummy {
+	CKL_ENTRY(clikit_i_dummy)	list;
+	void				*ptr;
+};
+
 struct clikit_context {
 	unsigned			magic;
 #define CLIKIT_CONTEXT_MAGIC		0xa70f836a
@@ -360,6 +381,9 @@ struct clikit_context {
 	int				recurse;
 
 	int				error;
+
+	struct clikit_i_dummy		*cur_instance;
+	CKL_HEAD(,clikit_i_dummy)	instances;
 
 	/* "Puts" handler */
 	clikit_puts_f			*puts_func;
@@ -574,6 +598,7 @@ CLIkit_New_Context(struct clikit *ck)
 	cc->e = cc->b + 64;
 	cc->p = cc->b;
 	cc->st = sIdle;
+	CKL_INIT(&cc->instances);
 	CKL_INSERT_HEAD(&ck->contexts, cc, list);
 
 	CLIkit_Set_Puts(cc, NULL, NULL);
@@ -643,6 +668,14 @@ CLIkit_Get_Prefix(const struct clikit_context *cc)
 
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
 	return (cc->prefix);
+}
+
+void *
+CLIkit_Get_Instance(const struct clikit_context *cc)
+{
+
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	return (cc->cur_instance->ptr);
 }
 
 /*********************************************************************
@@ -715,14 +748,90 @@ clikit_add_char(struct clikit_context *cc, int ch)
 }
 
 /*********************************************************************
+ *
+ */
+
+int
+clikit_int_stdinstance(struct clikit_context *cc, clikit_recurse_f *rf,
+   const char *h1, const char *h2)
+{
+	struct clikit_i_dummy *id, *id2;
+
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	assert(rf != NULL);
+
+	/* If Help prefix:  Recurse without instance */
+	if ((cc->prefix & 1)) {
+		if (CLIkit_Printf(cc, "%*s%-*s %s\\n",
+		    cc->help * 2, "", 30 - cc->help * 2, h1, h2))
+			return (1);
+		cc->help++;
+		cc->cur_instance = NULL;
+		(void)rf(cc);
+		cc->help--;
+		return (1);
+	}
+
+	/* Recursion at end of command:  Walk through all instances */
+	if (cc->recurse && clikit_int_eol(cc)) {
+		CKL_FOREACH_SAFE(id, &cc->instances, list, id2) {
+			cc->cur_instance = id;
+			(void)rf(cc);
+		}
+		return (1);
+	}
+
+	if (clikit_int_eol(cc)) {
+		(void)CLIkit_Error(cc, -1, "Incomplete command\\n");
+		return (-1);
+	}
+	return (0);
+}
+
+/*********************************************************************
  */
 
 void
-clikit_int_tophelplevel(struct clikit_context *cc, int i)
+clikit_int_findinstance(struct clikit_context *cc, void *ip,
+    clikit_compare_f *func)
 {
+	struct clikit_i_dummy *id, *id2;
+	id2 = ip;
+
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
-	cc->help += i;
+
+	CKL_FOREACH(id, &cc->instances, list) {
+		if (func(id, ip) == 0) {
+			id2->ptr = id->ptr;
+			cc->cur_instance = id;
+			return;
+		}
+	}
+
 }
+
+/*********************************************************************
+ */
+
+void
+clikit_int_addinstance(struct clikit_context *cc, const void *ptr,
+    unsigned long len)
+{
+	struct clikit_i_dummy *id;
+	void *p;
+
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+
+	p = calloc(1L, len);
+	assert(p != 0);
+	(void)memcpy(p, ptr, len);
+	id = p;
+	CKL_INSERT_HEAD(&cc->instances, id, list);
+	cc->cur_instance = id;
+}
+
+/*********************************************************************
+ */
 
 int
 clikit_int_tophelp(const struct clikit_context *cc, const char *s1,
@@ -959,10 +1068,16 @@ int
 clikit_int_eol(const struct clikit_context *cc)
 {
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
-	(void)printf("%s()\\n", __func__);
 	if (*cc->p == 0)
 		return (1);
 	return (0);
+}
+
+int
+clikit_int_recurse(const struct clikit_context *cc)
+{
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	return (cc->recurse);
 }
 
 #if 0
@@ -985,7 +1100,8 @@ int
 clikit_int_unknown(struct clikit_context *cc)
 {
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
-	return (CLIkit_Error(cc, -1, "Unknown command\\n"));
+	(void)CLIkit_Error(cc, -1, "Unknown command\\n");
+	return (-1);
 }
 
 int
@@ -1156,7 +1272,7 @@ def parse_leaf(tl, fc, fh):
 	fc.write('{\n')
 	n = 0
 	for i in al:
-		fc.write("\t%s arg_%d;\n" % (types[i], n))
+		fc.write("\t%s arg_%d = 0;\n" % (types[i], n))
 		n += 1
 	fc.write("\n")	
 	s = ''
@@ -1165,6 +1281,17 @@ def parse_leaf(tl, fc, fh):
 	fc.write('\tif (clikit_int_tophelp(cc, "%s%s", "%s"))\n' %
 		(nm, s, kv['desc']))
 	fc.write('\t\treturn(0);\n')
+
+	fc.write('\tif (clikit_int_eol(cc) && clikit_int_recurse(cc)) {\n')
+	fc.write('\t\t%s(cc' % kv['func'])
+	n = 0
+	for i in al:
+		fc.write(", arg_%d" % n)
+		n += 1
+	fc.write(");\n")
+	fc.write('\t\treturn(0);\n')
+	fc.write('\t}\n')
+
 	fc.write('\tif (clikit_int_match(cc, "%s"))\n\t\treturn(0);\n' % nm)
 
 	fc.write('\tif (clikit_int_help(cc, "%s: %s"))\n' % (nm, kv['desc']))
@@ -1223,20 +1350,53 @@ def parse_instance(tl, fc, fh):
 	fh.write("/* At token %d INSTANCE %s */\n" % (nr, nm))
 	fc.write("\n/* At token %d INSTANCE %s */\n" % (nr, nm))
 
+	###############################################################
 	# Emit instance struct
+
 	ivs = "i_%d" % nr
+	fc.write("/*lint -esym(754, %s::list) */\n" % ivs)
+	fc.write("/*lint -esym(754, le_next) */\n")
+	fc.write("/*lint -esym(754, le_prev) */\n")
 	fc.write("struct %s {\n" % ivs)
-	#fc.write("\tCKL_ENTRY(%s)\tlist;\n" % ivs)
+	fc.write("\tCKL_ENTRY(%s)\tlist;\n" % ivs)
+	fc.write("\tvoid\t\t\t*ptr;\n")
 	n = 0
 	for i in al:
 		fc.write("\t%s\t\targ_%d;\n" % (types[i], n));
 		n += 1
-	#fc.write("\tvoid\t\t\t*ptr;\n")
 	fc.write("};\n\n")
 
+	###############################################################
 	# XXX: emit sorting function
 
-	# Emit recurse_function
+	fc.write("static int\n")
+	fc.write("compare_%d(const void *aa, const void *bb)\n" % nr)
+	fc.write("{\n")
+	fc.write("\tconst struct %s *a = aa;\n" % ivs)
+	fc.write("\tconst struct %s *b = bb;\n" % ivs)
+	fc.write("\t\n")
+	n = 0
+	for i in al:
+		if i == "UINT" or i == "REAL" or i == "INT":
+			fc.write("\tif (a->arg_%d > b->arg_%d)\n" % (n, n))
+			fc.write("\t\treturn (1);\n")
+			fc.write("\tif (a->arg_%d < b->arg_%d)\n" % (n, n))
+			fc.write("\t\treturn (-1);\n")
+		elif i == "WORD" or i == "STRING":
+			fc.write("\t{\n")
+			fc.write("\tint i = strcmp(a->arg_%d, a->arg_%d);\n"
+			    % (n, n))
+			fc.write("\tif (i != 0)\n")
+			fc.write("\t\treturn(i);\n")
+			fc.write("\t}\n")
+		else:
+			assert i == "Unhandled type"
+	fc.write("\treturn(0);\n")
+	fc.write("}\n\n")
+
+	###############################################################
+	# Emit recurse function
+
 	fc.write("static int\n")
 	fc.write("recurse_%d(struct clikit_context *cc)\n" % nr)
 	fc.write("{\n")
@@ -1249,11 +1409,29 @@ def parse_instance(tl, fc, fh):
 		fc.write("if ((retval = %s(cc)) != 0) /*lint !e838*/\n" % i)
 		fc.write("\t\t;\n")
 		s = "else "
+	fc.write("\telse if (CLIkit_Get_Prefix(cc) & 1)\n")
+	fc.write("\t\tretval = 1;\n")
+	fc.write("\telse if (clikit_int_recurse(cc))\n")
+	fc.write("\t\tretval = 1;\n")
 	fc.write("\telse\n")
 	fc.write("\t\tretval = clikit_int_unknown(cc);\n")
 	fc.write("\treturn (retval);\n")
 	fc.write("}\n");
 	fc.write("\n");
+
+	###############################################################
+	# Emit function prototype
+
+	if kv['func'] == None:
+		syntax("Missing 'func' in LEAF(%s)" % nm)
+
+	fh.write("int %s(struct clikit_context *" % kv["func"])
+	for i in al:
+		fh.write(", %s" % types[i]);
+	fh.write(", void **);\n\n")
+
+	###############################################################
+	# Emit match function
 
 	if kv['desc'] == None:
 		kv['desc'] = "(no description)"
@@ -1264,70 +1442,49 @@ def parse_instance(tl, fc, fh):
 		static = ""
 		fh.write("int %s(struct clikit_context*);\n" % kv['name'])
 
-	if kv['func'] == None:
-		syntax("Missing 'func' in LEAF(%s)" % nm)
-
-	print("Instance(%d, %s)" % (nr, nm), al, kv)
-	for i in children:
-		print("\t", i)
-		
-	fh.write("int %s(struct clikit_context *" % kv["func"])
-	for i in al:
-		fh.write(", %s" % types[i]);
-	fh.write(");\n\n")
-
 	fc.write(static + "int\n%s(struct clikit_context *cc)\n" % kv['name'])
 	fc.write('{\n')
 	fc.write('\tint retval;\n')
 	fc.write('\tstruct %s ivs;\n' % ivs)
 	fc.write("\n")	
 
-	s = ""
+	s = nm
 	for i in al:
 		s += " <" + i + ">"
-	fc.write('\tif (clikit_int_tophelp(cc, "%s%s:", "%s")) {\n' %
-	    (nm, s, kv['desc']))
-	fc.write('\t\tclikit_int_tophelplevel(cc, 1);\n')
-	for i in children:
-		fc.write('\t\t(void)%s(cc);\n' % i)
-	fc.write('\t\tclikit_int_tophelplevel(cc, -1);\n')
-	fc.write('\t\treturn(0);\n')
-	fc.write('\t}\n')
+	s += ":"
 
-	fc.write('\tif (clikit_int_match(cc, "%s"))\n\t\treturn(0);\n' % nm)
+	fc.write('\tretval = clikit_int_stdinstance(cc, recurse_%d,\n' % nr)
+	fc.write('\t    \"%s\", \"%s\");\n' % (s,kv['desc']))
+	fc.write('\tif (retval)\n\t\treturn (retval);\n\n')
 
-	fc.write('\tif (clikit_int_help(cc, "%s: %s"))\n' %
-	    (nm, kv['desc']))
-	fc.write('\t\treturn(1);\n')
-		
+	fc.write('\tif (clikit_int_match(cc, "%s"))\n\t\treturn(0);\n\n' % nm)
+
+	fc.write('\tif (clikit_int_eol(cc))\n')
+	fc.write('\tretval = clikit_int_stdinstance(cc, recurse_%d,\n' % nr)
+	fc.write('\t    \"%s\", \"%s\");\n' % (s,kv['desc']))
+	fc.write('\tif (retval)\n\t\treturn (retval);\n\n')
+
 	n = 0
 	for i in al:
 		fc.write('\tif (clikit_int_arg_%s(cc, &ivs.arg_%d))\n' % (i, n))
-		fc.write('\t\treturn(-1);\n')
+		fc.write('\t\treturn(-1);\n\n')
 		n += 1
-	fc.write("\tif (%s(cc" % kv['func'])
+
+	fc.write("\tivs.ptr = 0;\n")
+	fc.write("\tclikit_int_findinstance(cc, &ivs, compare_%d);\n" % nr);
+	fc.write("\tif (ivs.ptr == 0 &&\n")
+	fc.write("\t    %s(cc" % kv['func'])
 	n = 0
 	for i in al:
 		fc.write(", ivs.arg_%d" % n)
 		n += 1
-	fc.write("))\n")
-	fc.write("\t\tretval = -1;\n")
-	fc.write('\telse if (clikit_int_eol(cc))\n')
-	fc.write("\t\tretval = 1;\n")
-	if False:
-		s = ""
-		for i in children:
-			print(i)
-			fc.write("\t" + s)
-			fc.write("if ((retval = %s(cc)) != 0) /*lint !e838*/\n" % i)
-			fc.write("\t\t;\n")
-			s = "else "
-		fc.write("\telse\n")
-		fc.write("\t\tretval = clikit_int_unknown(cc);\n")
-		fc.write("\tclikit_int_pop_instance(cc);\n")
-		fc.write("\treturn (retval);\n")
-	else:
-		fc.write("\treturn (recurse_%d(cc));\n" % nr)
+	fc.write(", &ivs.ptr))\n")
+	fc.write("\t\treturn (-1);\n")
+	fc.write("\tassert(ivs.ptr != 0);\n")
+	# XXX: look for existing instance 
+	fc.write("\tclikit_int_addinstance(cc, &ivs, sizeof ivs);\n\n")
+
+	fc.write("\treturn (recurse_%d(cc));\n" % nr)
 	fc.write("}\n");
 
 	return kv['name']
@@ -1385,6 +1542,8 @@ def do_tree(argv):
 	fc = open(fname[0] + ".c", "w")
 	do_copyright(fc)
 
+	fc.write('#include <assert.h>\n')
+	fc.write('#include <string.h>\n')
 	fc.write('#define CLIKIT_INTERNAL\n')
 	fc.write('#include "clikit.h"\n')
 	fc.write('#include "%s.h"\n' % fname[0])
