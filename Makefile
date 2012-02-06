@@ -1,20 +1,21 @@
 
+CC=	gcc
 
 all:
 	python CLIkit.py --code
-	cat test.ck
+	@echo "-------------------------------"
 	python CLIkit.py --tree test.ck
 	@echo "-------------------------------"
-	sed 1,27d test.h
-	@echo "-------------------------------"
-	sed 1,27d test.c
-	@echo "-------------------------------"
-	cc -g -c -Wall -Werror clikit.c
-	cc -g -c -Wall -Werror main.c
-	cc -g -c -Wall -Werror test.c
-	cc -g -o a.out main.o clikit.o test.o
+	${CC} -g -c -Wall -Werror clikit.c
+	${CC} -g -c -Wall -Werror main.c
+	${CC} -g -c -Wall -Werror test.c
+	${CC} -g -o a.out main.o clikit.o test.o
 	./a.out
-	flexelint -I. clikit.c main.c test.c || true
+	if flexelint -I. clikit.c main.c test.c > _.flint ; then \
+		echo "FlexeLint is happy" ; \
+	else \
+		cat _.flint ; \
+	fi
 
 clean:
 	rm -f clikit.[ch]

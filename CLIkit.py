@@ -1341,6 +1341,7 @@ def parse_leaf(tl, fc, fh):
 	assert tl.pop(0) == "LEAF"
 	nr = len(tl)
 	nm = tl.pop(0)
+	print("Compiling leaf %s at token #%d" % (nm, nr))
 
 	fh.write("/* At token %d LEAF %s */\n" % (nr, nm))
 	fc.write("\n/* At token %d LEAF %s */\n" % (nr, nm))
@@ -1375,7 +1376,6 @@ def parse_leaf(tl, fc, fh):
 	if kv['func'] == None:
 		syntax("Missing 'func' in LEAF(%s)" % nm)
 
-	print("Leaf(%d, %s)" % (nr, nm), tal, kv)
 
 	fh.write("void %s(struct clikit_context *" % kv["func"])
 	for i in tal:
@@ -1389,9 +1389,12 @@ def parse_leaf(tl, fc, fh):
 		fc.write("\t%s arg_%d = 0;\n" % (i.ctype(), n))
 		n += 1
 	fc.write("\n")	
+
+	# XXX: Enums look ugly
 	s = ''
 	for i in tal:
 		s += " <" + i.name + ">"
+
 	fc.write('\tif (clikit_int_tophelp(cc, "%s%s", "%s"))\n' %
 		(nm, s, kv['desc']))
 	fc.write('\t\treturn(0);\n')
@@ -1433,6 +1436,7 @@ def parse_instance(tl, fc, fh):
 	assert tl.pop(0) == "INSTANCE"
 	nr = len(tl)
 	nm = tl.pop(0)
+	print("Compiling instance %s at token #%d" % (nm, nr))
 
 	tal = parse_arglist(tl, fc, fh)
 	if len(tl) == 0:
@@ -1498,7 +1502,6 @@ def parse_instance(tl, fc, fh):
 	fc.write("\n")
 	s = ""
 	for i in children:
-		print(i)
 		fc.write("\t" + s)
 		fc.write("if ((retval = %s(cc)) != 0) /*lint !e838*/\n" % i)
 		fc.write("\t\t;\n")
@@ -1616,7 +1619,6 @@ def parse(fname, fc, fh):
 	fc.write("\n")
 	s = ""
 	for i in children:
-		print(i)
 		fc.write("\t" + s)
 		fc.write("if ((retval = %s(cc)) != 0) /*lint !e838*/\n" % i)
 		fc.write("\t\t;\n")
@@ -1649,7 +1651,6 @@ def do_tree(argv):
 	do_copyright(fh)
 
 	parse(argv[0], fc, fh)
-	print(fname)
 	fc.close()
 	fh.close()
 
