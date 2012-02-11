@@ -184,7 +184,6 @@ def do_code(argv):
 			usage()
 		pfx = argv[1]
 		argv = argv[2:]
-	print("DO_CODE", "PFX=%s" % pfx, argv)
 	if len(argv) > 0:
 		usage("XXX: no options supported yet")
 
@@ -1399,8 +1398,9 @@ def parse_import(tl, fc, fh, toplev):
 def parse_leaf(tl, fc, fh, toplev):
 	assert tl.pop(0) == "LEAF"
 	nr = len(tl)
+	if len(tl) == 0:
+		syntax("Missing name of LEAF at %d" % nr)
 	nm = tl.pop(0)
-	print("Compiling leaf %s at token #%d" % (nm, nr))
 
 	tal = parse_arglist(tl, fc, fh)
 
@@ -1671,7 +1671,6 @@ def parse(fname, fc, fh):
 #
 
 def do_tree(argv):
-	print("DO_TREE", argv)
 	if len(argv) != 1:
 		usage("XXX: options not yet implemented")
 	fname = os.path.splitext(argv[0])
