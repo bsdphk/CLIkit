@@ -10,7 +10,11 @@ all:
 	${CC} -g -c -Wall -Werror main.c
 	${CC} -g -c -Wall -Werror test.c
 	${CC} -g -o a.out main.o clikit.o test.o
+
+test:	all
 	./a.out
+
+flexelint:
 	if flexelint -I. clikit.c main.c test.c > _.flint ; then \
 		echo "FlexeLint is happy" ; \
 	else \
@@ -22,3 +26,4 @@ clean:
 	rm -f test.[ch]
 	rm -f *.o
 	rm -f a.out
+	rm -f _.flint
