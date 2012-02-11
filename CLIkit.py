@@ -120,7 +120,7 @@ def parse_enum(tl, fc, fh):
 		l.append(tl.pop(0))
 	assert tl.pop(0) == "}"
 	l.sort()
-	fc.write("static const char *%s[] = {\n" % id)
+	fc.write("\nstatic const char *%s[] = {\n" % id)
 	for i in l:
 		fc.write("\t\"%s\",\n" % i)
 	fc.write("};\n")
@@ -1337,52 +1337,84 @@ def parse_arglist(tl, fc, fh):
 		tal.append(vtypes[tl.pop(0)])
 	return tal
 
-def parse_leaf(tl, fc, fh):
+def parse_brace(tl, fc, fh, toplev, nr, what, tokens, leaf):
+	if len(tl) == 0:
+		syntax("Missing '{' in " + what)
+	assert tl.pop(0) == "{"
+	kv = dict()
+	children = list()
+	for i in tokens:
+		kv[i] = None
+	if toplev:
+		kv['NAME'] = None
+	while len(tl) > 0 and tl[0] != "}":
+		if keyval(kv, tl, what):
+			continue
+		elif leaf:
+			syntax("Unknown '%s' in " % tl[0] + what)
+		elif tl[0] == "IMPORT":
+			children.append(parse_import(tl, fc, fh, False))
+		elif tl[0] == "LEAF":
+			children.append(parse_leaf(tl, fc, fh, False))
+		elif tl[0] == "INSTANCE":
+			children.append(parse_instance(tl, fc, fh, False))
+		elif tl[0] == "BRANCH":
+			children.append(parse_branch(tl, fc, fh, False))
+		else:
+			syntax("Unknown '%s' in " % tl[0] + what)
+	if len(tl) == 0:
+		syntax("Missing '}' in " + what)
+	assert tl.pop(0) == "}"
+
+	fh.write("\n/* At token %d %s */\n" % (nr, what))
+	fc.write("\n/* At token %d %s */\n" % (nr, what))
+
+	if 'DESC' in kv and kv['DESC'] == None:
+		kv['DESC'] = "(no description in .ck file)"
+
+	if 'NAME' in kv and kv['NAME'] == None:
+		kv['NAME'] = "match_%d" % nr
+		static = "static "
+	elif 'NAME' in kv:
+		static = ""
+		fh.write("int %s(struct clikit_context*);\n" % kv['NAME'])
+	else:
+		kv['NAME'] = "match_%d" % nr
+		static = "static "
+
+	if 'FUNC' in kv and kv['FUNC'] == None:
+		syntax("Missing 'FUNC' in " + what)
+
+	return (kv, static, children)
+
+def parse_import(tl, fc, fh, toplev):
+	assert tl.pop(0) == "IMPORT"
+	nr = len(tl)
+	ref = tl.pop(0)
+	fh.write("\n/* At token %d IMPORT(%s) */\n" % (nr, ref))
+	fh.write("extern int " + ref)
+	fh.write("(struct clikit_context*); /*lint !e762*/\n")
+	return ref
+
+def parse_leaf(tl, fc, fh, toplev):
 	assert tl.pop(0) == "LEAF"
 	nr = len(tl)
 	nm = tl.pop(0)
 	print("Compiling leaf %s at token #%d" % (nm, nr))
 
-	fh.write("/* At token %d LEAF %s */\n" % (nr, nm))
-	fc.write("\n/* At token %d LEAF %s */\n" % (nr, nm))
-
 	tal = parse_arglist(tl, fc, fh)
-	if len(tl) == 0:
-		syntax("Missing '{' in LEAF(%s)" % nm)
-	assert tl.pop(0) == "{"
-	kv = {
-		"desc":	None,
-		"func": None,
-		"name": None,
-	}
-	while len(tl) > 0 and tl[0] != "}":
-		if keyval(kv, tl, "LEAF(%s)" % nm):
-			continue
-		else:
-			syntax("Unknown '%s' in LEAF(%s)" % (tl[0], nm))
-	if len(tl) == 0:
-		syntax("Missing '}' in LEAF(%s)" % nm)
-	assert tl.pop(0) == "}"
 
-	if kv['desc'] == None:
-		kv['desc'] = "(no description)"
-	if kv['name'] == None:
-		kv['name'] = "match_%d" % nr
-		static = "static "
-	else:
-		static = ""
-		fh.write("int %s(struct clikit_context*);\n" % kv['name'])
+	kv,static,children = parse_brace(tl, fc, fh, toplev,
+	    nr, "LEAF(%s)" % nm,
+	    ("DESC", "FUNC"), True)
 
-	if kv['func'] == None:
-		syntax("Missing 'func' in LEAF(%s)" % nm)
-
-
-	fh.write("void %s(struct clikit_context *" % kv["func"])
+	fh.write("void %s(struct clikit_context *" % kv["FUNC"])
 	for i in tal:
 		fh.write(", " + i.ctype())
-	fh.write(");\n\n")
+	fh.write(");\n")
 
-	fc.write(static + "int\n%s(struct clikit_context *cc)\n" % kv['name'])
+	fc.write("\n" + static)
+	fc.write("int\n%s(struct clikit_context *cc)\n" % kv['NAME'])
 	fc.write('{\n')
 	n = 0
 	for i in tal:
@@ -1395,12 +1427,12 @@ def parse_leaf(tl, fc, fh):
 	for i in tal:
 		s += " <" + i.name + ">"
 
-	fc.write('\tif (clikit_int_tophelp(cc, "%s%s", "%s"))\n' %
-		(nm, s, kv['desc']))
+	fc.write('\tif (clikit_int_tophelp(cc, "%s%s",\n\t    "%s"))\n' %
+		(nm, s, kv['DESC']))
 	fc.write('\t\treturn(0);\n')
 
 	fc.write('\tif (clikit_int_eol(cc) && clikit_int_recurse(cc)) {\n')
-	fc.write('\t\t%s(cc' % kv['func'])
+	fc.write('\t\t%s(cc' % kv['FUNC'])
 	n = 0
 	for i in tal:
 		fc.write(", arg_%d" % n)
@@ -1411,7 +1443,7 @@ def parse_leaf(tl, fc, fh):
 
 	fc.write('\tif (clikit_int_match(cc, "%s"))\n\t\treturn(0);\n' % nm)
 
-	fc.write('\tif (clikit_int_help(cc, "%s: %s"))\n' % (nm, kv['desc']))
+	fc.write('\tif (clikit_int_help(cc, "%s: %s"))\n' % (nm, kv['DESC']))
 	fc.write('\t\treturn(1);\n')
 
 	n = 0
@@ -1420,7 +1452,7 @@ def parse_leaf(tl, fc, fh):
 		fc.write('\t\treturn(-1);\n')
 		n += 1
 	fc.write('\tif (!clikit_int_eol(cc))\n\t\treturn(-1);\n')
-	fc.write('\t%s(cc' % kv['func'])
+	fc.write('\t%s(cc' % kv['FUNC'])
 	n = 0
 	for i in tal:
 		fc.write(", arg_%d" % n)
@@ -1429,46 +1461,53 @@ def parse_leaf(tl, fc, fh):
 	fc.write("\treturn(1);\n")
 	fc.write("}\n")
 
-	return kv['name']
+	if static != "":
+		return kv['NAME']
 	
+def parse_branch(tl, fc, fh, toplev):
+	assert tl.pop(0) == "BRANCH"
+	nr = len(tl)
 
-def parse_instance(tl, fc, fh):
+	kv,static,children = parse_brace(tl, fc, fh, toplev,
+	    nr, "BRANCH(@%d)" % nr,
+	    (), False)
+
+	fc.write("\n" + static + "int\n")
+	fc.write(kv['NAME'] + "(struct clikit_context *cc)\n")
+	fc.write("{\n")
+	fc.write("\tint retval;\n")
+	fc.write("\n")
+	s = ""
+	for i in children:
+		fc.write("\t" + s)
+		fc.write("if ((retval = %s(cc)) != 0) /*lint !e838*/\n" % i)
+		fc.write("\t\t;\n")
+		s = "else "
+	fc.write("\telse\n\t\t;\n")
+	fc.write("\treturn (retval);\n")
+	fc.write("}\n");
+	fc.write("\n");
+
+	if static != "":
+		return kv['NAME']
+
+def parse_instance(tl, fc, fh, toplev):
 	assert tl.pop(0) == "INSTANCE"
 	nr = len(tl)
 	nm = tl.pop(0)
 	print("Compiling instance %s at token #%d" % (nm, nr))
 
 	tal = parse_arglist(tl, fc, fh)
-	if len(tl) == 0:
-		syntax("Missing '{' in INSTANCE(%s)" % nm)
-	assert tl.pop(0) == "{"
-	children = list()
-	kv = {
-		"desc":	None,
-		"func": None,
-		"name": None,
-	}
-	while len(tl) > 0 and tl[0] != "}":
-		if keyval(kv, tl, "INSTANCE(%s)" % nm):
-			continue
-		elif tl[0] == "LEAF":
-			children.append(parse_leaf(tl, fc, fh))
-		elif tl[0] == "INSTANCE":
-			children.append(parse_instance(tl, fc, fh))
-		else:
-			syntax("Unknown '%s' in INSTANCE(%s)" % (tl[0], nm))
-	if len(tl) == 0:
-		syntax("Missing '}' in LEAF(%s)" % nm)
-	assert tl.pop(0) == "}"
 
-	fh.write("/* At token %d INSTANCE %s */\n" % (nr, nm))
-	fc.write("\n/* At token %d INSTANCE %s */\n" % (nr, nm))
+	kv,static,children = parse_brace(tl, fc, fh, toplev,
+	    nr, "INSTANCE(%s)" % nm,
+	    ("DESC", "FUNC"), False)
 
 	###############################################################
 	# Emit instance struct
 
 	ivs = "i_%d" % nr
-	fc.write("struct %s {\n" % ivs)
+	fc.write("\nstruct %s {\n" % ivs)
 	fc.write("\tstruct clikit_instance	instance;\n")
 	n = 0
 	for i in tal:
@@ -1519,27 +1558,18 @@ def parse_instance(tl, fc, fh):
 	###############################################################
 	# Emit function prototype
 
-	if kv['func'] == None:
-		syntax("Missing 'func' in LEAF(%s)" % nm)
+	if kv['FUNC'] == None:
+		syntax("Missing 'FUNC' in LEAF(%s)" % nm)
 
-	fh.write("int %s(struct clikit_context *" % kv["func"])
+	fh.write("int %s(struct clikit_context *" % kv["FUNC"])
 	for i in tal:
 		fh.write(", %s" % i.ctype());
-	fh.write(", void **);\n\n")
+	fh.write(", void **);\n")
 
 	###############################################################
 	# Emit match function
 
-	if kv['desc'] == None:
-		kv['desc'] = "(no description)"
-	if kv['name'] == None:
-		kv['name'] = "match_%d" % nr
-		static = "static "
-	else:
-		static = ""
-		fh.write("int %s(struct clikit_context*);\n" % kv['name'])
-
-	fc.write(static + "int\n%s(struct clikit_context *cc)\n" % kv['name'])
+	fc.write(static + "int\n%s(struct clikit_context *cc)\n" % kv['NAME'])
 	fc.write('{\n')
 	fc.write('\tint retval;\n')
 	fc.write('\tstruct %s ivs;\n' % ivs)
@@ -1551,14 +1581,14 @@ def parse_instance(tl, fc, fh):
 	s += ":"
 
 	fc.write('\tretval = clikit_int_stdinstance(cc, recurse_%d,\n' % nr)
-	fc.write('\t    \"%s\", \"%s\");\n' % (s,kv['desc']))
+	fc.write('\t    \"%s\", \"%s\");\n' % (s,kv['DESC']))
 	fc.write('\tif (retval)\n\t\treturn (retval);\n\n')
 
 	fc.write('\tif (clikit_int_match(cc, "%s"))\n\t\treturn(0);\n\n' % nm)
 
 	fc.write('\tif (clikit_int_eol(cc)) {\n')
 	fc.write('\t\tretval = clikit_int_stdinstance(cc, recurse_%d,\n' % nr)
-	fc.write('\t\t    \"%s\", \"%s\");\n' % (s,kv['desc']))
+	fc.write('\t\t    \"%s\", \"%s\");\n' % (s,kv['DESC']))
 	fc.write('\t\tif (retval)\n\t\t\treturn (retval);\n\n')
 	fc.write('\t}\n')
 
@@ -1572,7 +1602,7 @@ def parse_instance(tl, fc, fh):
 	fc.write("\tclikit_int_findinstance(cc, &ivs,")
 	fc.write(" recurse_%d, compare_%d);\n" % (nr, nr))
 	fc.write("\tif (ivs.instance.ptr == 0 &&\n")
-	fc.write("\t    %s(cc" % kv['func'])
+	fc.write("\t    %s(cc" % kv['FUNC'])
 	n = 0
 	for i in tal:
 		fc.write(", ivs.arg_%d" % n)
@@ -1582,13 +1612,13 @@ def parse_instance(tl, fc, fh):
 	fc.write("\tassert(ivs.instance.ptr != 0);\n")
 	# XXX: look for existing instance 
 	fc.write("\tclikit_int_addinstance(cc, &ivs,")
-	fc.write("\t recurse_%d, sizeof ivs);\n\n" % nr)
+	fc.write(" recurse_%d, sizeof ivs);\n\n" % nr)
 
 	fc.write("\treturn (recurse_%d(cc));\n" % nr)
 	fc.write("}\n");
 
-	return kv['name']
-
+	if static != "":
+		return kv['NAME']
 
 def parse(fname, fc, fh):
 	fi = open(fname, "r")
@@ -1599,26 +1629,34 @@ def parse(fname, fc, fh):
 	while len(tl):
 		i = tl[0]
 		if i == "LEAF":
-			children.append(parse_leaf(tl, fc, fh))
+			children.append(parse_leaf(tl, fc, fh, True))
+		elif i == "BRANCH":
+			children.append(parse_branch(tl, fc, fh, True))
 		elif i == "INSTANCE":
-			children.append(parse_instance(tl, fc, fh))
+			children.append(parse_instance(tl, fc, fh, True))
 		else:
 			syntax("Unknown '%s' at top" % tl[0])
 
-	if len(children) == 0:
+	n = 0
+	for i in children:
+		if i != None:
+			n += 1
+	if n == 0:
 		return
 
-	fh.write("/* At top BRANCH */\n")
-	fc.write("\n/* At top BRANCH */\n")
+	fh.write("\n/* At TOP */\n")
+	fc.write("\n/* At TOP */\n")
 
 	fh.write("int clikit_match(struct clikit_context *);\n")
 
-	fc.write("int\nclikit_match(struct clikit_context *cc)\n")
+	fc.write("\nint\nclikit_match(struct clikit_context *cc)\n")
 	fc.write("{\n")
 	fc.write("\tint retval;\n")
 	fc.write("\n")
 	s = ""
 	for i in children:
+		if i == None:
+			continue
 		fc.write("\t" + s)
 		fc.write("if ((retval = %s(cc)) != 0) /*lint !e838*/\n" % i)
 		fc.write("\t\t;\n")

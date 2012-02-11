@@ -2,36 +2,50 @@
 # Comment1
 LEAF foo INT {
 	# Comment2
-	desc	"state of foobar"
-	func	do_foo			# Comment3
-	name	match_foo
+	DESC	"state of foobar"
+	FUNC	do_foo			# Comment3
 }
 
 LEAF bar REAL ENUM { day year hour minute second } {
-	desc	"percentage of snafu"
-	func	do_bar
+	DESC	"percentage of snafu"
+	FUNC	do_bar
+}
+
+BRANCH {
+	NAME	ignition
+
+	LEAF fizzle WORD {
+		DESC	"don't fire"
+		FUNC	do_fizzle
+	}
+	LEAF boom WORD {
+		DESC	"do fire"
+		FUNC	do_boom
+	}
 }
 
 INSTANCE things UINT {
-	desc	"things of sorts"
-	func	things_instance
+	DESC	"things of sorts"
+	FUNC	things_instance
+
+	IMPORT ignition
 
 	LEAF this UINT {
-		desc "what is this"
-		func do_things_this
+		DESC "what is this"
+		FUNC do_things_this
 	}
 	LEAF that WORD INT {
-		desc "point to that"
-		func do_things_that
+		DESC "point to that"
+		FUNC do_things_that
 	}
 
 	INSTANCE junk WORD UINT {
-		desc "junk"
-		func junk_instance
+		DESC "junk"
+		FUNC junk_instance
 
 		LEAF whatchamacallit REAL {
-			desc "thingmajics"
-			func pitch_it
+			DESC "thingmajics"
+			FUNC pitch_it
 		}
 	}
 }

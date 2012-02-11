@@ -36,6 +36,20 @@ struct thing {
 	int		that_1;
 };
 
+void
+do_fizzle(struct clikit_context *cc, const char *a0)
+{
+	(void)cc;
+	printf("%s(%s)\n", __func__, a0);
+}
+void
+do_boom(struct clikit_context *cc, const char *a0)
+{
+	(void)cc;
+	printf("%s(%s)\n", __func__, a0);
+}
+
+
 /*lint -e{818} */
 void
 do_things_this(struct clikit_context *cc, unsigned a0)
@@ -136,7 +150,7 @@ main(int argc, char **argv)
 	assert(0 == CLIkit_Add_Prefix_Recurse(ck, "conf", P_CONF));
 
 	assert(0 == CLIkit_Add_Tree(ck, clikit_match, NULL));
-	assert(0 == CLIkit_Add_Tree(ck, match_foo, "snafu"));
+	assert(0 == CLIkit_Add_Tree(ck, ignition, NULL));
 
 	cc = CLIkit_New_Context(ck);
 	assert(cc != NULL);
@@ -156,10 +170,10 @@ main(int argc, char **argv)
 		docmd(cc, "\nconf\n");
 		docmd(cc, "\nconf things\n");
 		docmd(cc, "\nbar 3.1415 day\n");
+		docmd(cc, "help\n");
 	}
 
 	assert(0 == CLIkit_Del_Tree(ck, clikit_match, NULL));
-	assert(0 == CLIkit_Del_Tree(ck, match_foo, "snafu"));
 	assert(0 == CLIkit_Destroy_Context(cc));
 	assert(0 == CLIkit_Del_Prefix(ck, "show"));
 	assert(0 == CLIkit_Destroy(ck));
