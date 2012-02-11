@@ -1,60 +1,70 @@
-Welcome to CLIkit
+What is CLIkit
+==============
 
 This is the third generation of a facility I have used for many years,
 which makes it easy to add a CLI interface to a C program.
 
 CLI commands are described in a structured format:
 
-	LEAF foo INT {
+	LEAF save_config INT {
 		# Comment2
-		desc    "state of foobar"
-		func    do_foo                  # Comment3
-		name    match_foo
+		DESC    "Save configuration to permanent storage"
+		FUNC    save_config             # Comment3
 	}
 
-	LEAF bar REAL {
-		desc    "percentage of snafu"
-		func    do_bar
+	LEAF load_config REAL {
+		DESC    "Load configuration from permanent storage"
+		FUNC    load_config
 	}
 
-	INSTANCE things UINT {
-		desc    "things of sorts"
-		func    things_instance
+	INSTANCE slot UINT {
+		DESC    "Per slot configuration"
+		FUNC    slot_instance
 
-		LEAF this UINT {
-			desc "what is this"
-			func do_things_this
-		}
-		LEAF that WORD INT {
-			desc "point to that"
-			func do_things_that
+		LEAF timeout REAL {
+			DESC "Timeout in seconds"
+			FUNC do_slot_timeout
 		}
 
-		INSTANCE junk WORD {
-			desc "junk"
-			func junk_instance
+		INSTANCE signal UINT {
+			desc "Per signal configuration"
+			func signal_instance
 
-			LEAF whatchamacallit REAL {
-				desc "thingmajics"
-				func pitch_it
+			LEAF frequency REAL {
+				desc "Frequency in Hz"
+				func ctl_frequency
+			}
+			LEAF shape ENUM { triangle ramp square sine } {
+				desc "Curve shape"
+				func ctl_shape
+			}
+			LEAF level REAL ENUM { Vpp Vrms dBm } {
+				desc "Signal Level"
+				func ctl_level
 			}
 		}
 	}
 
-And the python script converts this into datastructures and code, which
+The python script converts this into datastructures and code, which
 handles all the tedious stuff like a "help" facility:
 
-	critter phk> ./a.out foo
+	./siggen
+	Hello World
 	help
-	  snafu:
-	    foo <INT>                  state of foobar
-	  foo <INT>                    state of foobar
-	  bar <REAL>                   percentage of snafu
-	  things <UINT>:               things of sorts
-	    this <UINT>                what is this
-	    that <WORD> <INT>          point to that
-	    junk <WORD>:               junk
-	      whatchamacallit <REAL>   thingmajics
+	  save_config <INT>            Save configuration to permanent storage
+	  load_config <REAL>           Load configuration from permanent storage
+	  slot <UINT>:                 Per slot configuration
+	    timeout <REAL>             Timeout in seconds
+	    signal <UINT>:             Per signal configuration
+	      frequency <REAL>         Frequency in Hz
+	      shape <enum_30>          Curve shape
+	      level <REAL> <enum_14>   Signal Level
+
+All you have to do is write the functions you specified above to
+actually do the stuff you want done.
+
+What to Expect
+==============
 
 This newest iteration is a complete rewrite, for increased portability
 and agility, but it is not complete yet, so caveat emptor.
@@ -62,5 +72,11 @@ and agility, but it is not complete yet, so caveat emptor.
 One of the central ideas in this rewrite, is that everything is
 contained in a single python script, so that should be all you need
 to pull into your own software project.
+
+While you wait for the 350 page leather-bound Nobel Literature Prize
+winning manual to materialize, you may be able to clean some clues
+by looking in .../SyntaxTests and .../Examples*
+
+Enjoy...
 
 Poul-Henning
