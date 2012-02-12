@@ -70,6 +70,14 @@ class vtype(object):
 		s += self.c_type + "*)"
 		return s
 
+	def clone(self, arg):
+		if self.c_type == "const char *":
+			s = "\ttarget->%s = strdup(target->%s);\n" % (arg, arg)
+			s += "\tif (target->%s == NULL) return (-1);\n" % arg
+			return s
+		else:
+			return None
+
 	def compare(self, arg):
 		if self.c_type in ("double", "int", "unsigned"):
 			s = "\tif (a->%s > b->%s)\n" % (arg, arg)
@@ -1569,12 +1577,12 @@ def parse_instance(tl, fc, fh, toplev):
 		fc.write(i.compare("arg_%d" % n))
 		n += 1
 	fc.write("\treturn(0);\n")
-	fc.write("}\n\n")
+	fc.write("}\n")
 
 	###############################################################
 	# Emit recurse function
 
-	fc.write("static int\n")
+	fc.write("\nstatic int\n")
 	fc.write("recurse_%d(struct clikit_context *cc)\n" % nr)
 	fc.write("{\n")
 	fc.write("\tint retval;\n")
@@ -1596,6 +1604,22 @@ def parse_instance(tl, fc, fh, toplev):
 	fc.write("\n");
 
 	###############################################################
+	# Emit clone function
+
+	fc.write("\nstatic int\n")
+	fc.write("clone_%d(struct %s *target)\n" % (nr, ivs))
+	fc.write("{\n")
+	n = 0
+	for i in tal:
+		s = i.clone("arg_%d" % n)
+		if s != None:
+			fc.write(s)
+		n += 1
+	fc.write("\treturn(0);\n")
+	fc.write("}\n")
+
+
+	###############################################################
 	# Emit function prototype
 
 	if not kv['FUNC'] in prototyped:
@@ -1608,7 +1632,8 @@ def parse_instance(tl, fc, fh, toplev):
 	###############################################################
 	# Emit match function
 
-	fc.write(static + "int\n%s(struct clikit_context *cc)\n" % kv['NAME'])
+	fc.write("\n" + static + "int\n")
+	fc.write("%s(struct clikit_context *cc)\n" % kv['NAME'])
 	fc.write('{\n')
 	fc.write('\tint retval;\n')
 	fc.write('\tstruct %s ivs;\n' % ivs)
@@ -1648,6 +1673,7 @@ def parse_instance(tl, fc, fh, toplev):
 		n += 1
 	fc.write(", &ivs.instance.ptr))\n")
 	fc.write("\t\t\treturn (-1);\n")
+	fc.write("\t\tassert(clone_%d(&ivs) == 0);\n" % nr)
 	fc.write("\t\tclikit_int_addinstance(cc, &ivs,")
 	fc.write(" recurse_%d, sizeof ivs);\n" % nr)
 	fc.write("\t}\n")
