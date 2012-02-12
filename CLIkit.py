@@ -328,8 +328,9 @@ void clikit_int_next(struct clikit_context *);
 const char *clikit_int_input(const struct clikit_context *);
 
 typedef int clikit_recurse_f(struct clikit_context *);
+typedef int clikit_delete_f(struct clikit_context *, void *);
 int clikit_int_stdinstance(struct clikit_context *, clikit_recurse_f *,
-    const char *, const char *);
+    clikit_delete_f *, const char *, const char *);
 
 typedef int clikit_compare_f(const void *, const void *);
 
@@ -849,10 +850,13 @@ clikit_add_char(struct clikit_context *cc, int ch)
 
 int
 clikit_int_stdinstance(struct clikit_context *cc, clikit_recurse_f *rf,
-   const char *h1, const char *h2)
+   clikit_delete_f *df, const char *h1, const char *h2)
 {
 	struct clikit_instance *id, *id2;
 	void *parent_instance;
+	int retval;
+
+	(void)df;
 
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
 	assert(rf != NULL);
@@ -875,16 +879,20 @@ clikit_int_stdinstance(struct clikit_context *cc, clikit_recurse_f *rf,
 	/* Recursion at end of command:  Walk through all instances */
 	if (cc->recurse && clikit_int_eol(cc)) {
 		parent_instance = cc->cur_instance;
+		retval = 1;
 		CKL_FOREACH_SAFE(id, &cc->ck->instances, list, id2) {
 			if (id->ident != rf)
 				continue;
 			if (id->parent != parent_instance)
 				continue;
 			cc->cur_instance = id;
-			(void)rf(cc);
+			retval = rf(cc);
+			if (retval < 0)
+				break;
+			(void)df(cc, id);
 		}
 		cc->cur_instance = parent_instance;
-		return (1);
+		return (retval);
 	}
 
 	if (clikit_int_eol(cc)) {
@@ -1577,6 +1585,15 @@ def parse_instance(tl, fc, fh, toplev):
 	fc.write("};\n\n")
 
 	###############################################################
+
+	icall = "%s(cc" % kv['FUNC']
+	n = 0
+	for i in tal:
+		icall += ", target->arg_%d" % n
+		n += 1
+	icall += ", &target->instance.ptr)"
+
+	###############################################################
 	# XXX: emit sorting function
 
 	fc.write("static int\n")
@@ -1614,7 +1631,6 @@ def parse_instance(tl, fc, fh, toplev):
 	fc.write("\t\tretval = clikit_int_unknown(cc);\n")
 	fc.write("\treturn (retval);\n")
 	fc.write("}\n");
-	fc.write("\n");
 
 	###############################################################
 	# Emit clone function
@@ -1632,6 +1648,28 @@ def parse_instance(tl, fc, fh, toplev):
 	fc.write("\treturn(0);\n")
 	fc.write("}\n")
 
+	###############################################################
+	# Emit delete function
+
+	fc.write("\nstatic int\n")
+	fc.write("delete_%d(struct clikit_context *cc, void *arg)\n" % nr)
+	fc.write("{\n")
+	fc.write("\tstruct %s *target = arg;\n" % ivs)
+	fc.write("\tif (%s)\n" % icall) 
+	fc.write("\t\treturn (-1);\n")
+	fc.write("\tif (target->instance.ptr == 0) {\n")
+	fc.write("\t\ttarget = clikit_int_del_cur_instance(cc);\n")
+	n = 0
+	for i in tal:
+		s = i.free("target->arg_%d" % n)
+		if s != None:
+			fc.write("\t\t%s;\n" % s)
+		n += 1	
+	fc.write("\t\tfree(target);\n")
+	fc.write("\t\treturn (1);\n")
+	fc.write("\t\t}\n")
+	fc.write("\treturn (0);\n")
+	fc.write("}\n")
 
 	###############################################################
 	# Emit function prototype
@@ -1650,7 +1688,7 @@ def parse_instance(tl, fc, fh, toplev):
 	fc.write("%s(struct clikit_context *cc)\n" % kv['NAME'])
 	fc.write('{\n')
 	fc.write('\tint retval;\n')
-	fc.write('\tstruct %s ivs, *dis;\n' % ivs)
+	fc.write('\tstruct %s ivs, *target = &ivs;\n' % ivs)
 	fc.write("\n")	
 
 	s = nm
@@ -1662,7 +1700,8 @@ def parse_instance(tl, fc, fh, toplev):
 	    % nm)
 	fc.write('\t\treturn(0);\n\n')
 
-	fc.write('\tretval = clikit_int_stdinstance(cc, recurse_%d,\n' % nr)
+	fc.write('\tretval = clikit_int_stdinstance(')
+	fc.write('cc, recurse_%d, delete_%d,\n' % (nr,nr))
 	fc.write('\t    \"%s\", \"%s\");\n' % (s,kv['DESC']))
 	fc.write('\tif (retval)\n\t\treturn (retval);\n\n')
 
@@ -1676,12 +1715,6 @@ def parse_instance(tl, fc, fh, toplev):
 	fc.write("\tclikit_int_findinstance(cc, &ivs,")
 	fc.write(" recurse_%d, compare_%d);\n\n" % (nr, nr))
 
-	icall = "%s(cc" % kv['FUNC']
-	n = 0
-	for i in tal:
-		icall += ", ivs.arg_%d" % n
-		n += 1
-	icall += ", &ivs.instance.ptr)"
 
 	fc.write("\tif (clikit_int_eol(cc) && clikit_int_recurse(cc)) {\n")
 	fc.write("\t\tif (ivs.instance.ptr != 0) {\n")
@@ -1689,19 +1722,7 @@ def parse_instance(tl, fc, fh, toplev):
 	fc.write("\t\t\tif (retval < 0)\n")
 	fc.write("\t\t\t\treturn (retval);\n")
 	fc.write("\t\t}\n")
-	fc.write("\t\tif (%s)\n" % icall)
-	fc.write("\t\t\treturn (-1);\n")
-	fc.write("\t\tif (ivs.instance.ptr == 0) {\n")
-	fc.write("\t\t\tdis = clikit_int_del_cur_instance(cc);\n")
-	n = 0
-	for i in tal:
-		s = i.free("dis->arg_%d" % n)
-		if s != None:
-			fc.write("\t\t\t%s;\n" % s)
-		n += 1	
-	fc.write("\t\t\tfree(dis);\n")
-	fc.write("\t\t\treturn (1);\n")
-	fc.write("\t\t}\n")
+	fc.write("\t\treturn (delete_%d(cc, target));\n" % nr)
 	fc.write("\t}\n\n")
 
 	fc.write("\tif (ivs.instance.ptr == 0) {\n")
