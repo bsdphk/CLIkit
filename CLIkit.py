@@ -177,6 +177,9 @@ def do_copyright(fd):
 
 """)
 
+#######################################################################
+#
+
 def do_code(argv):
 	pfx = "clikit"
 	if len(argv) > 0 and argv[0] == "-o":
@@ -1328,6 +1331,8 @@ clikit_int_arg_enum(struct clikit_context *cc, const char **arg,
 
 import shlex
 
+prototyped = dict()
+
 def syntax(foo):
 	sys.stderr.write("Syntax Error:\n\t" + foo + "\n")
 	exit(2)
@@ -1427,10 +1432,12 @@ def parse_leaf(tl, fc, fh, toplev):
 	    nr, "LEAF(%s)" % nm,
 	    ("DESC", "FUNC"), True)
 
-	fh.write("void %s(struct clikit_context *" % kv["FUNC"])
-	for i in tal:
-		fh.write(", " + i.ctype())
-	fh.write(");\n")
+	if not kv['FUNC'] in prototyped:
+		fh.write("void %s(struct clikit_context *" % kv["FUNC"])
+		for i in tal:
+			fh.write(", " + i.ctype())
+		fh.write(");\n")
+		prototyped[kv['FUNC']] = True
 
 	fc.write("\n" + static)
 	fc.write("int\n%s(struct clikit_context *cc)\n" % kv['NAME'])
@@ -1497,13 +1504,10 @@ def parse_branch(tl, fc, fh, toplev):
 	fc.write("{\n")
 	fc.write("\tint retval;\n")
 	fc.write("\n")
-	s = ""
 	for i in children:
-		fc.write("\t" + s)
+		fc.write("\t")
 		fc.write("if ((retval = %s(cc)) != 0) /*lint !e838*/\n" % i)
-		fc.write("\t\t;\n")
-		s = "else "
-	fc.write("\telse\n\t\t;\n")
+		fc.write("\t\treturn (retval);\n")
 	fc.write("\treturn (retval);\n")
 	fc.write("}\n");
 	fc.write("\n");
@@ -1578,13 +1582,12 @@ def parse_instance(tl, fc, fh, toplev):
 	###############################################################
 	# Emit function prototype
 
-	if kv['FUNC'] == None:
-		syntax("Missing 'FUNC' in LEAF(%s)" % nm)
-
-	fh.write("int %s(struct clikit_context *" % kv["FUNC"])
-	for i in tal:
-		fh.write(", %s" % i.ctype());
-	fh.write(", void **);\n")
+	if not kv['FUNC'] in prototyped:
+		fh.write("int %s(struct clikit_context *" % kv["FUNC"])
+		for i in tal:
+			fh.write(", %s" % i.ctype());
+		fh.write(", void **);\n")
+		prototyped[kv['FUNC']] = True
 
 	###############################################################
 	# Emit match function
