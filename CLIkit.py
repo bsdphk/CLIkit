@@ -1477,21 +1477,28 @@ def parse_leaf(tl, fc, fh, toplev):
 	for i in tal:
 		s += " <" + i.name + ">"
 
+	mcall = '%s(cc' % kv['FUNC']
+	n = 0
+	for i in tal:
+		mcall += ", arg_%d" % n
+		n += 1
+	mcall += ");"
+
 	fc.write('\tif (clikit_int_tophelp(cc, "%s%s",\n\t    "%s"))\n' %
 		(nm, s, kv['DESC']))
 	fc.write('\t\treturn(0);\n')
 
 	fc.write('\tif (clikit_int_eol(cc) && clikit_int_recurse(cc)) {\n')
-	fc.write('\t\t%s(cc' % kv['FUNC'])
-	n = 0
-	for i in tal:
-		fc.write(", arg_%d" % n)
-		n += 1
-	fc.write(");\n")
+	fc.write('\t\t' + mcall + "\n")
 	fc.write('\t\treturn(0);\n')
 	fc.write('\t}\n')
 
 	fc.write('\tif (clikit_int_match(cc, "%s"))\n\t\treturn(0);\n' % nm)
+
+	fc.write('\tif (clikit_int_eol(cc) && clikit_int_recurse(cc)) {\n')
+	fc.write('\t\t' + mcall + "\n")
+	fc.write('\t\treturn(0);\n')
+	fc.write('\t}\n')
 
 	fc.write('\tif (clikit_int_help(cc, \n')
 	fc.write('\t    "%s: %s"))\n' % (nm, kv['DESC']))
@@ -1503,12 +1510,7 @@ def parse_leaf(tl, fc, fh, toplev):
 		fc.write('\t\treturn(-1);\n')
 		n += 1
 	fc.write('\tif (!clikit_int_eol(cc))\n\t\treturn(-1);\n')
-	fc.write('\t%s(cc' % kv['FUNC'])
-	n = 0
-	for i in tal:
-		fc.write(", arg_%d" % n)
-		n += 1
-	fc.write(");\n")
+	fc.write('\t' + mcall + "\n")
 	fc.write("\treturn(1);\n")
 	fc.write("}\n")
 
