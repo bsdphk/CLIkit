@@ -4,7 +4,7 @@ NO_MAN		?= sorry
 INCL		= -I. -I.. -I${.CURDIR} -I${.CURDIR}/..
 CFLAGS		+= ${INCL}
 
-CLIKIT		= python /home/phk/Git/CLIkit/CLIkit.py
+CLIKIT		= python ${.CURDIR}/../../CLIkit.py
 
 flexelint: ${SRCS:M*.c}
 	@if flexelint ${INCL} ${.ALLSRC} > _.flint ; then \
