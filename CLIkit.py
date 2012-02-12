@@ -374,6 +374,7 @@ struct {								\\
 
 struct clikit_instance {
 	CKL_ENTRY(clikit_instance)	list;
+	const void			*parent;
 	const void			*ident;
 	void				*ptr;
 };
@@ -412,6 +413,8 @@ struct clikit {
 	CKL_HEAD(, clikit_branch)	branches;
 	CKL_HEAD(, clikit_prefix)	prefixes;
 	CKL_HEAD(, clikit_context)	contexts;
+
+	CKL_HEAD(,clikit_instance)	instances;
 };
 
 struct clikit_branch {
@@ -453,7 +456,6 @@ struct clikit_context {
 	int				error;
 
 	struct clikit_instance		*cur_instance;
-	CKL_HEAD(,clikit_instance)	instances;
 
 	/* "Puts" handler */
 	clikit_puts_f			*puts_func;
@@ -475,6 +477,7 @@ CLIkit_New(void)
 	CKL_INIT(&ck->branches);
 	CKL_INIT(&ck->prefixes);
 	CKL_INIT(&ck->contexts);
+	CKL_INIT(&ck->instances);
 	return (ck);
 }
 
@@ -668,7 +671,6 @@ CLIkit_New_Context(struct clikit *ck)
 	cc->e = cc->b + 64;
 	cc->p = cc->b;
 	cc->st = sIdle;
-	CKL_INIT(&cc->instances);
 	CKL_INSERT_HEAD(&ck->contexts, cc, list);
 
 	CLIkit_Set_Puts(cc, NULL, NULL);
@@ -826,6 +828,7 @@ clikit_int_stdinstance(struct clikit_context *cc, clikit_recurse_f *rf,
    const char *h1, const char *h2)
 {
 	struct clikit_instance *id, *id2;
+	void *parent_instance;
 
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
 	assert(rf != NULL);
@@ -844,12 +847,16 @@ clikit_int_stdinstance(struct clikit_context *cc, clikit_recurse_f *rf,
 
 	/* Recursion at end of command:  Walk through all instances */
 	if (cc->recurse && clikit_int_eol(cc)) {
-		CKL_FOREACH_SAFE(id, &cc->instances, list, id2) {
+		parent_instance = cc->cur_instance;
+		CKL_FOREACH_SAFE(id, &cc->ck->instances, list, id2) {
 			if (id->ident != rf)
+				continue;
+			if (id->parent != parent_instance)
 				continue;
 			cc->cur_instance = id;
 			(void)rf(cc);
 		}
+		cc->cur_instance = parent_instance;
 		return (1);
 	}
 
@@ -872,8 +879,10 @@ clikit_int_findinstance(struct clikit_context *cc, void *ip, const void *ident,
 
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
 
-	CKL_FOREACH(id, &cc->instances, list) {
+	CKL_FOREACH(id, &cc->ck->instances, list) {
 		if (id->ident != ident)
+			continue;
+		if (id->parent != cc->cur_instance)
 			continue;
 		if (func(id, ip) == 0) {
 			id2->ptr = id->ptr;
@@ -901,7 +910,8 @@ clikit_int_addinstance(struct clikit_context *cc, const void *ptr,
 	(void)memcpy(p, ptr, len);
 	id = p;
 	id->ident = ident;
-	CKL_INSERT_HEAD(&cc->instances, id, list);
+	id->parent = cc->cur_instance;
+	CKL_INSERT_HEAD(&cc->ck->instances, id, list);
 	cc->cur_instance = id;
 }
 
@@ -987,6 +997,7 @@ clikit_exec(struct clikit_context *cc)
 	cc->p = cc->b;
 	cc->help = 0;
 	cc->prefix = 0;
+	cc->cur_instance = 0;
 	cc->error = 0;
 	cc->recurse = 0;
 	do {
@@ -1443,7 +1454,8 @@ def parse_leaf(tl, fc, fh, toplev):
 
 	fc.write('\tif (clikit_int_match(cc, "%s"))\n\t\treturn(0);\n' % nm)
 
-	fc.write('\tif (clikit_int_help(cc, "%s: %s"))\n' % (nm, kv['DESC']))
+	fc.write('\tif (clikit_int_help(cc, \n')
+	fc.write('\t    "%s: %s"))\n' % (nm, kv['DESC']))
 	fc.write('\t\treturn(1);\n')
 
 	n = 0
@@ -1601,18 +1613,18 @@ def parse_instance(tl, fc, fh, toplev):
 	fc.write("\tivs.instance.ptr = 0;\n")
 	fc.write("\tclikit_int_findinstance(cc, &ivs,")
 	fc.write(" recurse_%d, compare_%d);\n" % (nr, nr))
-	fc.write("\tif (ivs.instance.ptr == 0 &&\n")
-	fc.write("\t    %s(cc" % kv['FUNC'])
+	fc.write("\tif (ivs.instance.ptr == 0) {\n")
+	fc.write("\t\tif (%s(cc" % kv['FUNC'])
 	n = 0
 	for i in tal:
 		fc.write(", ivs.arg_%d" % n)
 		n += 1
 	fc.write(", &ivs.instance.ptr))\n")
-	fc.write("\t\treturn (-1);\n")
+	fc.write("\t\t\treturn (-1);\n")
+	fc.write("\t\tclikit_int_addinstance(cc, &ivs,")
+	fc.write(" recurse_%d, sizeof ivs);\n" % nr)
+	fc.write("\t}\n")
 	fc.write("\tassert(ivs.instance.ptr != 0);\n")
-	# XXX: look for existing instance 
-	fc.write("\tclikit_int_addinstance(cc, &ivs,")
-	fc.write(" recurse_%d, sizeof ivs);\n\n" % nr)
 
 	fc.write("\treturn (recurse_%d(cc));\n" % nr)
 	fc.write("}\n");

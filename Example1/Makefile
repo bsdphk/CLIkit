@@ -1,6 +1,6 @@
 
 
-calc:	siggen.ck main.c
+siggen:	siggen.ck main.c ../CLIkit.py
 	python ../CLIkit.py --code
 	python ../CLIkit.py --tree siggen.ck
 	cc -o siggen -Wall -Werror -I. clikit.c siggen.c main.c

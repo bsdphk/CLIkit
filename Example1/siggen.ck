@@ -1,10 +1,10 @@
-        LEAF save_config INT {
+        LEAF save_config WORD {
                 # Comment2
                 DESC    "Save configuration to permanent storage"
                 FUNC    save_config             # Comment3
         }
 
-        LEAF load_config REAL {
+        LEAF load_config WORD {
                 DESC    "Load configuration from permanent storage"
                 FUNC    load_config
         }
@@ -26,7 +26,7 @@
                                 DESC "Frequency in Hz"
                                 FUNC ctl_frequency
                         }
-                        LEAF shape ENUM { triangle ramp square sine } {
+                        LEAF shape ENUM { sine triangle square } {
                                 DESC "Curve shape"
                                 FUNC ctl_shape
                         }
