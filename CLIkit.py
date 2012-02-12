@@ -53,39 +53,51 @@ import os
 vtypes = dict()
 
 class vtype(object):
-	def __init__(self, name, ctype):
+	def __init__(self, name, citype, cetype = None):
 		self.name = name;
-		self.c_type = ctype
+		self.ci_type = citype
+		if cetype == None:
+			cetype = citype
+		self.ce_type = cetype
 		self.func = "clikit_int_arg_" + self.name
 		vtypes[name] = self
 
-	def ctype(self):
-		return self.c_type
+	def citype(self):
+		return self.ci_type
+
+	def cetype(self):
+		return self.ce_type
 
 	def conv(self, cc, tgt):
 		return "%s(%s, %s)" % (self.func, cc, tgt)
 
 	def conv_proto(self):
 		s = "int " + self.func + "(struct clikit_context *, "
-		s += self.c_type + "*)"
+		s += self.ci_type + "*)"
 		return s
 
 	def clone(self, arg):
-		if self.c_type == "const char *":
+		if self.ci_type == "char *":
 			s = "\ttarget->%s = strdup(target->%s);\n" % (arg, arg)
 			s += "\tif (target->%s == NULL) return (-1);\n" % arg
 			return s
 		else:
 			return None
 
+	def free(self, arg):
+		if self.ci_type == "char *":
+			return "free(%s)" % arg
+		else:
+			return None
+
 	def compare(self, arg):
-		if self.c_type in ("double", "int", "unsigned"):
+		if self.ci_type in ("double", "int", "unsigned"):
 			s = "\tif (a->%s > b->%s)\n" % (arg, arg)
 			s += "\t\treturn (1);\n"
 			s += "\tif (a->%s < b->%s)\n" % (arg, arg)
 			s += "\t\treturn (-1);\n"
 			return s
-		if self.c_type == "const char *":
+		if self.ci_type == "char *":
 			s = "\t{\n"
 			s += "\tint i = strcmp(a->%s, b->%s);\n" % (arg, arg)
 			s += "\tif (i != 0)\n"
@@ -97,15 +109,15 @@ class vtype(object):
 vtype("REAL", "double")
 vtype("UINT", "unsigned")
 vtype("INT", "int")
-vtype("WORD", "const char *")
-vtype("STRING", "const char *")
+vtype("WORD", "char *", "const char *")
+vtype("STRING", "char *", "const char *")
 
 #######################################################################
 #
 
 class vtype_enum(vtype):
 	def __init__(self, name, word_list):
-		vtype.__init__(self, name, "const char *")
+		vtype.__init__(self, name, "char *", "const char *")
 		self.wlist = word_list
 		self.func = "clikit_int_arg_enum"
 
@@ -114,7 +126,7 @@ class vtype_enum(vtype):
 
 	def conv_proto(self):
 		s = "int " + self.func + "(struct clikit_context *cc, "
-		s += self.c_type + "*,\n    const char **)"
+		s += self.ci_type + "*,\n    const char **)"
 		return s
 
 vtype_enum("ENUM", None)
@@ -328,6 +340,7 @@ void clikit_int_findinstance(struct clikit_context *, void *, const void *,
     clikit_compare_f*);
 void clikit_int_addinstance(struct clikit_context *, const void *,
     const void *ident, unsigned long);
+void *clikit_int_del_cur_instance(struct clikit_context *);
 
 """)
 	for i,j in vtypes.iteritems():
@@ -932,6 +945,21 @@ clikit_int_addinstance(struct clikit_context *cc, const void *ptr,
 /*********************************************************************
  */
 
+void *
+clikit_int_del_cur_instance(struct clikit_context *cc)
+{
+	struct clikit_instance *id;
+
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	id = cc->cur_instance;
+	cc->cur_instance = NULL;
+	CKL_REMOVE(id, list);
+	return (id);
+}
+
+/*********************************************************************
+ */
+
 int
 clikit_int_tophelp(const struct clikit_context *cc, const char *s1,
     const char *s2)
@@ -1286,7 +1314,7 @@ clikit_int_arg_UINT(struct clikit_context *cc, unsigned *arg)
 }
 
 int
-clikit_int_arg_WORD(struct clikit_context *cc, const char **arg)
+clikit_int_arg_WORD(struct clikit_context *cc, char **arg)
 {
 	char *p;
 
@@ -1307,7 +1335,7 @@ clikit_int_arg_WORD(struct clikit_context *cc, const char **arg)
 }
 
 int
-clikit_int_arg_STRING(struct clikit_context *cc, const char **arg)
+clikit_int_arg_STRING(struct clikit_context *cc, char **arg)
 {
 
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
@@ -1322,7 +1350,7 @@ clikit_int_arg_STRING(struct clikit_context *cc, const char **arg)
 }
 
 int
-clikit_int_arg_enum(struct clikit_context *cc, const char **arg,
+clikit_int_arg_enum(struct clikit_context *cc, char **arg,
     const char **wlist)
 {
 	const char **d;
@@ -1459,7 +1487,7 @@ def parse_leaf(tl, fc, fh, toplev):
 	if not kv['FUNC'] in prototyped:
 		fh.write("void %s(struct clikit_context *" % kv["FUNC"])
 		for i in tal:
-			fh.write(", " + i.ctype())
+			fh.write(", " + i.cetype())
 		fh.write(");\n")
 		prototyped[kv['FUNC']] = True
 
@@ -1468,7 +1496,7 @@ def parse_leaf(tl, fc, fh, toplev):
 	fc.write('{\n')
 	n = 0
 	for i in tal:
-		fc.write("\t%s arg_%d = (%s)0;\n" % (i.ctype(), n, i.ctype()))
+		fc.write("\t%s arg_%d = (%s)0;\n" % (i.citype(), n, i.citype()))
 		n += 1
 	fc.write("\n")	
 
@@ -1561,7 +1589,7 @@ def parse_instance(tl, fc, fh, toplev):
 	fc.write("\tstruct clikit_instance	instance;\n")
 	n = 0
 	for i in tal:
-		fc.write("\t%s\t\targ_%d;\n" % (i.ctype(), n));
+		fc.write("\t%s\t\targ_%d;\n" % (i.citype(), n));
 		n += 1
 	fc.write("};\n\n")
 
@@ -1611,6 +1639,7 @@ def parse_instance(tl, fc, fh, toplev):
 	fc.write("\nstatic int\n")
 	fc.write("clone_%d(struct %s *target)\n" % (nr, ivs))
 	fc.write("{\n")
+	fc.write("\t(void)target;\n")
 	n = 0
 	for i in tal:
 		s = i.clone("arg_%d" % n)
@@ -1627,7 +1656,7 @@ def parse_instance(tl, fc, fh, toplev):
 	if not kv['FUNC'] in prototyped:
 		fh.write("int %s(struct clikit_context *" % kv["FUNC"])
 		for i in tal:
-			fh.write(", %s" % i.ctype());
+			fh.write(", " + i.cetype());
 		fh.write(", void **);\n")
 		prototyped[kv['FUNC']] = True
 
@@ -1638,7 +1667,7 @@ def parse_instance(tl, fc, fh, toplev):
 	fc.write("%s(struct clikit_context *cc)\n" % kv['NAME'])
 	fc.write('{\n')
 	fc.write('\tint retval;\n')
-	fc.write('\tstruct %s ivs;\n' % ivs)
+	fc.write('\tstruct %s ivs, *dis;\n' % ivs)
 	fc.write("\n")	
 
 	s = nm
@@ -1666,14 +1695,38 @@ def parse_instance(tl, fc, fh, toplev):
 
 	fc.write("\tivs.instance.ptr = 0;\n")
 	fc.write("\tclikit_int_findinstance(cc, &ivs,")
-	fc.write(" recurse_%d, compare_%d);\n" % (nr, nr))
-	fc.write("\tif (ivs.instance.ptr == 0) {\n")
-	fc.write("\t\tif (%s(cc" % kv['FUNC'])
+	fc.write(" recurse_%d, compare_%d);\n\n" % (nr, nr))
+
+	icall = "%s(cc" % kv['FUNC']
 	n = 0
 	for i in tal:
-		fc.write(", ivs.arg_%d" % n)
+		icall += ", ivs.arg_%d" % n
 		n += 1
-	fc.write(", &ivs.instance.ptr))\n")
+	icall += ", &ivs.instance.ptr)"
+
+	fc.write("\tif (clikit_int_eol(cc) && clikit_int_recurse(cc)) {\n")
+	fc.write("\t\tif (ivs.instance.ptr != 0) {\n")
+	fc.write("\t\t\tretval = recurse_%d(cc);\n" % nr)
+	fc.write("\t\t\tif (retval < 0)\n")
+	fc.write("\t\t\t\treturn (retval);\n")
+	fc.write("\t\t}\n")
+	fc.write("\t\tif (%s)\n" % icall)
+	fc.write("\t\t\treturn (-1);\n")
+	fc.write("\t\tif (ivs.instance.ptr == 0) {\n")
+	fc.write("\t\t\tdis = clikit_int_del_cur_instance(cc);\n")
+	n = 0
+	for i in tal:
+		s = i.free("dis->arg_%d" % n)
+		if s != None:
+			fc.write("\t\t\t%s;\n" % s)
+		n += 1	
+	fc.write("\t\t\tfree(dis);\n")
+	fc.write("\t\t\treturn (1);\n")
+	fc.write("\t\t}\n")
+	fc.write("\t}\n\n")
+
+	fc.write("\tif (ivs.instance.ptr == 0) {\n")
+	fc.write("\t\tif (%s)\n" % icall)
 	fc.write("\t\t\treturn (-1);\n")
 	fc.write("\t\tassert(clone_%d(&ivs) == 0);\n" % nr)
 	fc.write("\t\tclikit_int_addinstance(cc, &ivs,")
@@ -1862,7 +1915,8 @@ def do_tree(argv):
 	do_copyright(fc)
 
 	fc.write('#include <assert.h>\t\t/*lint -efile(766, assert.h) */\n')
-	fc.write('#include <string.h>\n')
+	fc.write('#include <stdlib.h>\n')
+	fc.write('#include <string.h>\t\t/*lint -efile(766, string.h) */\n')
 	fc.write('#define CLIKIT_INTERNAL\n')
 	fc.write('#include "clikit.h"\n')
 	fc.write('#include "%s.h"\n' % bname)

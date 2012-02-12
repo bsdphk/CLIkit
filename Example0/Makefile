@@ -12,10 +12,10 @@ clean:
 	rm -f calc *.o clikit.[ch] calc.[ch] _.flint
 
 flexelint:
-	if flexelint -I. main.c calc.c > _.flint ; then \
+	@if flexelint -I. main.c calc.c > _.flint ; then \
 		echo "FlexeLint is happy" ; \
 	else \
 		cat _.flint ; \
 	fi
-	rm -f _.flint
+	@rm -f _.flint
 
