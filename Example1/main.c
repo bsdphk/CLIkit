@@ -20,6 +20,7 @@ struct sig {
 	unsigned		sig;
 	enum shape_e		shape;
 	double			level;
+	enum level_e		lunit;
 	double			frequency;
 };
 
@@ -32,12 +33,6 @@ struct slot {
 
 static struct slot		slots[N_SLOT];
 static struct clikit *ck;
-
-/**********************************************************************/
-
-/*lint -emacro({779},WRONG) */
-/*lint -emacro({506},WRONG) */
-#define WRONG(foo)	assert(foo == 0)
 
 /**********************************************************************
  * Reset the configuration to default
@@ -217,9 +212,25 @@ ctl_shape(struct clikit_context *cc, enum shape_e a0)
 void
 ctl_level(struct clikit_context *cc, double a0, enum level_e a1)
 {
-	(void)cc;
-	(void)a0;
-	(void)a1;
+	struct sig *sp = CLIkit_Get_Instance(cc);
+	unsigned pfx = CLIkit_Get_Prefix(cc);
+	const char *s;
+
+	assert(sp != NULL);
+	assert(sp->magic == SIG_MAGIC);
+	if (pfx & PFX_SHOW) {
+		if (sp->level == 0.)
+			return;
+		assert(0 == level_e2str(sp->lunit, &s));
+		(void)CLIkit_Printf(cc, "slot %u signal %u level %g %s\n",
+		    sp->slot, sp->sig, sp->level, s);
+	} else if (pfx & PFX_NO) {
+		sp->level = 0;
+		sp->lunit = LEV_VRMS;
+	} else {
+		sp->level = a0;
+		sp->lunit = a1;
+	}
 }
 
 /**********************************************************************

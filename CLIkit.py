@@ -1437,7 +1437,7 @@ def parse_leaf(tl, fc, fh, toplev):
 	fc.write('{\n')
 	n = 0
 	for i in tal:
-		fc.write("\t%s arg_%d = 0;\n" % (i.ctype(), n))
+		fc.write("\t%s arg_%d = (%s)0;\n" % (i.ctype(), n, i.ctype()))
 		n += 1
 	fc.write("\n")	
 
@@ -1679,9 +1679,7 @@ def parse_c_enum(tl, fc, fh):
 	assert tl.pop(0) == "}"
 
 	v = vtype_c_enum(nm)
-	print(vtypes)
 
-	print(l)
 	fh.write("\n/* At token %d C_ENUM %s */\n" % (nr, nm))
 	fc.write("\n/* At token %d C_ENUM %s */\n" % (nr, nm))
 
@@ -1716,10 +1714,11 @@ def parse_c_enum(tl, fc, fh):
 	fc.write('\t}\n')
 	fc.write('}\n')
 
-	fh.write("int clikit_int_arg_%s(struct clikit_context *," % nm)
-	fh.write(" enum %s *);\n" % nm)
+	fh.write("/*lint -esym(759, str2%s, %s2str)*/\n" % (nm, nm))
+	fh.write("/*lint -esym(765, str2%s, %s2str)*/\n" % (nm, nm))
 
-	fc.write("\nint\nclikit_int_arg_%s(struct clikit_context *cc," % nm)
+	fc.write("\nstatic int\n")
+	fc.write("clikit_int_arg_%s(struct clikit_context *cc," % nm)
 	fc.write(" enum %s *arg)\n" % nm)
 	fc.write("{\n")
 	fc.write("\tconst char *input = clikit_int_input(cc);\n")
@@ -1736,6 +1735,7 @@ def parse_c_enum(tl, fc, fh):
 	fc.write("\t}\n")
 	fc.write('\t(void)CLIkit_Error(cc, -1, "Invalid %s argument\\n");\n'
 	    % nm)
+	# XXX: list valid choices
 	fc.write("\treturn (-1);\n")
 	fc.write("}\n")
 	
@@ -1803,7 +1803,7 @@ def do_tree(argv):
 	fc = open(fname[0] + ".c", "w")
 	do_copyright(fc)
 
-	fc.write('#include <assert.h>\n')
+	fc.write('#include <assert.h>\t\t/*lint -efile(766, assert.h) */\n')
 	fc.write('#include <string.h>\n')
 	fc.write('#define CLIKIT_INTERNAL\n')
 	fc.write('#include "clikit.h"\n')

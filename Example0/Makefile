@@ -1,6 +1,6 @@
 
 
-calc:	calc.ck main.c
+calc:	calc.ck main.c ../CLIkit.py
 	python ../CLIkit.py --code
 	python ../CLIkit.py --tree calc.ck
 	cc -o calc -Wall -Werror -I. clikit.c calc.c main.c

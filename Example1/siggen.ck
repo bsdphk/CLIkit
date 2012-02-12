@@ -6,8 +6,8 @@
 	}
 
 	C_ENUM level_e {
+		Vrms = LEV_VRMS = 0
 		Vpp = LEV_VPP
-		Vrms = LEV_VRMS
 		dBm = LEV_DBM
 	}
 
