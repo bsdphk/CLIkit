@@ -307,7 +307,7 @@ int clikit_int_recurse(const struct clikit_context *);
 // void clikit_int_pop_instance(struct clikit_context *);
 int clikit_int_unknown(struct clikit_context *);
 void clikit_int_next(struct clikit_context *);
-const char *clikit_int_input(struct clikit_context *);
+const char *clikit_int_input(const struct clikit_context *);
 
 typedef int clikit_recurse_f(struct clikit_context *);
 int clikit_int_stdinstance(struct clikit_context *, clikit_recurse_f *,
@@ -961,7 +961,7 @@ clikit_top_help(struct clikit_context *cc)
  */
 
 const char *
-clikit_int_input(struct clikit_context *cc)
+clikit_int_input(const struct clikit_context *cc)
 {
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
 	return (cc->p);
