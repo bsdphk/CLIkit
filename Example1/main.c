@@ -205,7 +205,7 @@ ctl_shape(struct clikit_context *cc, enum shape_e a0)
 }
 
 /**********************************************************************
- * Not implemented Yet
+ * Set the level
  */
 
 /*lint -e{818} */
