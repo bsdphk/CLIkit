@@ -83,7 +83,7 @@ class vtype(object):
 			s += "\tif (i != 0)\n"
 			s += "\t\treturn(i);\n"
 			s += "\t}\n"
-			return (s)
+			return s
 		assert "Missing" == "Vtype compare function"
 
 vtype("REAL", "double")
@@ -303,6 +303,8 @@ int clikit_int_recurse(const struct clikit_context *);
 // void clikit_int_push_instance(struct clikit_context *);
 // void clikit_int_pop_instance(struct clikit_context *);
 int clikit_int_unknown(struct clikit_context *);
+void clikit_int_next(struct clikit_context *);
+const char *clikit_int_input(struct clikit_context *);
 
 typedef int clikit_recurse_f(struct clikit_context *);
 int clikit_int_stdinstance(struct clikit_context *, clikit_recurse_f *,
@@ -955,8 +957,15 @@ clikit_top_help(struct clikit_context *cc)
  * We have a complete command, execute it.
  */
 
-static void
-clikit_next(struct clikit_context *cc)
+const char *
+clikit_int_input(struct clikit_context *cc)
+{
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	return (cc->p);
+} 
+
+void
+clikit_int_next(struct clikit_context *cc)
 {
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
 	assert(*cc->p);
@@ -1005,7 +1014,7 @@ clikit_exec(struct clikit_context *cc)
 		if (i == -1)
 			return;
 		if (i == 1)
-			clikit_next(cc);
+			clikit_int_next(cc);
 	} while (i == 1);
 	if (!*cc->p && (cc->prefix & 1))
 		clikit_top_help(cc);
@@ -1018,7 +1027,7 @@ clikit_exec(struct clikit_context *cc)
 			if (cb->root != NULL) {
 				if (strcmp(cc->p, cb->root))
 					continue;
-				clikit_next(cc);
+				clikit_int_next(cc);
 			}
 			i = cb->func(cc);
 			if (i)
@@ -1146,7 +1155,7 @@ clikit_int_match(struct clikit_context *cc, const char *str)
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
 	if (strcmp(cc->p, str))
 		return (1);
-	clikit_next(cc);
+	clikit_int_next(cc);
 	return (0);
 }
 
@@ -1208,7 +1217,7 @@ clikit_int_arg_REAL(struct clikit_context *cc, double *arg)
 		return (-1);
 	}
 	*arg = d;
-	clikit_next(cc);
+	clikit_int_next(cc);
 	return (0);
 }
 
@@ -1234,7 +1243,7 @@ clikit_int_arg_INT(struct clikit_context *cc, int *arg)
 		return (-1);
 	}
 	*arg = (int)ul;
-	clikit_next(cc);
+	clikit_int_next(cc);
 	return (0);
 }
 
@@ -1260,7 +1269,7 @@ clikit_int_arg_UINT(struct clikit_context *cc, unsigned *arg)
 		return (-1);
 	}
 	*arg = (unsigned)ul;
-	clikit_next(cc);
+	clikit_int_next(cc);
 	return (0);
 }
 
@@ -1281,7 +1290,7 @@ clikit_int_arg_WORD(struct clikit_context *cc, const char **arg)
 			return (-1);
 		}
 	*arg = cc->p;
-	clikit_next(cc);
+	clikit_int_next(cc);
 	return (0);
 }
 
@@ -1300,7 +1309,7 @@ clikit_int_arg_enum(struct clikit_context *cc, const char **arg,
 	for(d = wlist; *d != NULL; d++) {
 		if (!strcmp(cc->p, *d)) {
 			*arg = cc->p;
-			clikit_next(cc);
+			clikit_int_next(cc);
 			return (0);
 		}
 	}
@@ -1314,7 +1323,6 @@ clikit_int_arg_enum(struct clikit_context *cc, const char **arg,
 
 """)
 
-#######################################################################
 #######################################################################
 #
 
@@ -1632,6 +1640,109 @@ def parse_instance(tl, fc, fh, toplev):
 	if static != "":
 		return kv['NAME']
 
+#######################################################################
+
+class vtype_c_enum(vtype):
+	def __init__(self, c_enum):
+		vtype.__init__(self, c_enum, "enum %s" % c_enum)
+
+	def compare(self, arg):
+		s = "\tif (a->%s > b->%s)\n" % (arg, arg)
+		s += "\t\treturn (1);\n"
+		s += "\tif (a->%s < b->%s)\n" % (arg, arg)
+		s += "\t\treturn (-1);\n"
+		return s
+
+def parse_c_enum(tl, fc, fh):
+	assert tl.pop(0) == "C_ENUM"
+	nr = len(tl)
+	nm = tl.pop(0)
+	assert tl.pop(0) == "{"
+	l = list()
+	while tl[0] != "}":
+		id = tl.pop(0)
+		lbl = None
+		num = None
+		while tl[0] == "=":
+			assert tl.pop(0) == "="
+			if tl[0][0].isdigit():
+				if num != None:
+					syntax("Multiple values for '%s'" % id)
+				num = tl.pop(0)
+			else:
+				if lbl != None:
+					syntax("Multiple labels for '%s'" % id)
+				lbl = tl.pop(0)
+		if lbl == None:
+			lbl = id
+		l.append((id, lbl, num))
+	assert tl.pop(0) == "}"
+
+	v = vtype_c_enum(nm)
+	print(vtypes)
+
+	print(l)
+	fh.write("\n/* At token %d C_ENUM %s */\n" % (nr, nm))
+	fc.write("\n/* At token %d C_ENUM %s */\n" % (nr, nm))
+
+	fh.write("enum %s {" % nm)
+	nl = "\n"
+	for i in l:
+		fh.write(nl)
+		nl = ",\n"
+		fh.write("\t%s" % i[1])
+		if i[2] != None:
+			fh.write(" = %s" % i[2])
+	fh.write("\n};\n")
+
+	fh.write("int str2%s(const char *, enum %s *);\n" % (nm,nm))
+	fc.write("\nint\nstr2%s(const char *s, enum %s *d)\n" % (nm, nm))
+	fc.write("{\n")
+	for i in l:
+		fc.write('\tif (!strcmp(s, "%s")) {\n' % i[0])
+		fc.write("\t\t*d = %s;\n" % i[1])
+		fc.write("\t\treturn(0);\n")
+		fc.write("\t}\n")
+	fc.write("\treturn (-1);\n")
+	fc.write("}\n")
+
+	fh.write("int %s2str(enum %s, const char **);\n" % (nm,nm))
+	fc.write("\nint\n%s2str(enum %s s,  const char **d)\n" % (nm, nm))
+	fc.write("{\n")
+	fc.write("\tswitch(s) {\n")
+	for i in l:
+		fc.write('\tcase %s: *d = "%s"; return (0);\n' % (i[1], i[0]))
+	fc.write('\tdefault: *d = 0; return (-1);\n')
+	fc.write('\t}\n')
+	fc.write('}\n')
+
+	fh.write("int clikit_int_arg_%s(struct clikit_context *," % nm)
+	fh.write(" enum %s *);\n" % nm)
+
+	fc.write("\nint\nclikit_int_arg_%s(struct clikit_context *cc," % nm)
+	fc.write(" enum %s *arg)\n" % nm)
+	fc.write("{\n")
+	fc.write("\tconst char *input = clikit_int_input(cc);\n")
+	fc.write("\n")
+	fc.write("\tassert(arg != NULL);\n")
+	fc.write("\tif (!input) {\n")
+	fc.write('\t\t(void)CLIkit_Error(cc, -1, "Missing %s argument\\n");\n'
+	    % nm);
+	fc.write("\t\treturn (-1);\n")
+	fc.write("\t}\n")
+	fc.write("\tif (!str2%s(input, arg)) {\n" % nm)
+	fc.write("\t\tclikit_int_next(cc);\n")
+	fc.write("\t\treturn (0);\n")
+	fc.write("\t}\n")
+	fc.write('\t(void)CLIkit_Error(cc, -1, "Invalid %s argument\\n");\n'
+	    % nm)
+	fc.write("\treturn (-1);\n")
+	fc.write("}\n")
+	
+	
+
+#######################################################################
+
 def parse(fname, fc, fh):
 	fi = open(fname, "r")
 	pt = fi.read()
@@ -1646,6 +1757,8 @@ def parse(fname, fc, fh):
 			children.append(parse_branch(tl, fc, fh, True))
 		elif i == "INSTANCE":
 			children.append(parse_instance(tl, fc, fh, True))
+		elif i == "C_ENUM":
+			parse_c_enum(tl, fc, fh)
 		else:
 			syntax("Unknown '%s' at top" % tl[0])
 

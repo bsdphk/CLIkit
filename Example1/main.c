@@ -13,14 +13,12 @@
 #define PFX_SHOW		2
 #define PFX_NO			4
 
-enum shape {sine, triangle, square};
-
 struct sig {
 	unsigned		magic;
 #define SIG_MAGIC		0x19ed7550
 	unsigned		slot;
 	unsigned		sig;
-	enum shape		shape;
+	enum shape_e		shape;
 	double			level;
 	double			frequency;
 };
@@ -189,7 +187,7 @@ ctl_frequency(struct clikit_context *cc, double a0)
 
 /*lint -e{818} */
 void
-ctl_shape(struct clikit_context *cc, const char *a0)
+ctl_shape(struct clikit_context *cc, enum shape_e a0)
 {
 	struct sig *sp = CLIkit_Get_Instance(cc);
 	unsigned pfx = CLIkit_Get_Prefix(cc);
@@ -201,26 +199,13 @@ ctl_shape(struct clikit_context *cc, const char *a0)
 	if (pfx & PFX_SHOW) {
 		if (sp->shape == sine)
 			return;
-		switch (sp->shape) {
-		case triangle:	s = "triangle"; break;
-		case square:	s = "square"; break;
-		case sine:	s = "sine"; break;
-		default:	WRONG("sp->shape is illegal");
-		}
+		assert(0 == shape_e2str(sp->shape, &s));
 		(void)CLIkit_Printf(cc, "slot %u signal %u shape %s\n",
 		    sp->slot, sp->sig, s);
 	} else if (pfx & PFX_NO) {
 		sp->shape = sine;
 	} else {
-		assert(a0 != NULL);
-		if (!strcmp(a0, "sine"))
-			sp->shape = sine;
-		else if (!strcmp(a0, "triangle"))
-			sp->shape = triangle;
-		else if (!strcmp(a0, "square"))
-			sp->shape = square;
-		else
-			WRONG("CLIkit messed up enum");
+		sp->shape = a0;
 	}
 }
 
@@ -230,7 +215,7 @@ ctl_shape(struct clikit_context *cc, const char *a0)
 
 /*lint -e{818} */
 void
-ctl_level(struct clikit_context *cc, double a0, const char *a1)
+ctl_level(struct clikit_context *cc, double a0, enum level_e a1)
 {
 	(void)cc;
 	(void)a0;
