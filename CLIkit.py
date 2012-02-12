@@ -90,6 +90,7 @@ vtype("REAL", "double")
 vtype("UINT", "unsigned")
 vtype("INT", "int")
 vtype("WORD", "const char *")
+vtype("STRING", "const char *")
 
 #######################################################################
 #
@@ -1298,6 +1299,21 @@ clikit_int_arg_WORD(struct clikit_context *cc, const char **arg)
 }
 
 int
+clikit_int_arg_STRING(struct clikit_context *cc, const char **arg)
+{
+
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	assert(arg != NULL);
+	if (!*cc->p) {
+		(void)CLIkit_Error(cc, -1, "Missing WORD argument\\n");
+		return (-1);
+	}
+	*arg = cc->p;
+	clikit_int_next(cc);
+	return (0);
+}
+
+int
 clikit_int_arg_enum(struct clikit_context *cc, const char **arg,
     const char **wlist)
 {
@@ -1812,17 +1828,18 @@ def do_tree(argv):
 	if len(argv) != 1:
 		usage("XXX: options not yet implemented")
 	fname = os.path.splitext(argv[0])
+	bname = os.path.basename(fname[0]) 
 
-	fc = open(fname[0] + ".c", "w")
+	fc = open(bname + ".c", "w")
 	do_copyright(fc)
 
 	fc.write('#include <assert.h>\t\t/*lint -efile(766, assert.h) */\n')
 	fc.write('#include <string.h>\n')
 	fc.write('#define CLIKIT_INTERNAL\n')
 	fc.write('#include "clikit.h"\n')
-	fc.write('#include "%s.h"\n' % fname[0])
+	fc.write('#include "%s.h"\n' % bname)
 
-	fh = open(fname[0] + ".h", "w")
+	fh = open(bname + ".h", "w")
 	do_copyright(fh)
 
 	parse(argv[0], fc, fh)
