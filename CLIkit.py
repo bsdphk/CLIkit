@@ -79,7 +79,7 @@ class vtype(object):
 			return s
 		if self.c_type == "const char *":
 			s = "\t{\n"
-			s += "\tint i = strcmp(a->%s, a->%s);\n" % (arg, arg)
+			s += "\tint i = strcmp(a->%s, b->%s);\n" % (arg, arg)
 			s += "\tif (i != 0)\n"
 			s += "\t\treturn(i);\n"
 			s += "\t}\n"
