@@ -6,9 +6,9 @@
 	}
 
 	C_ENUM level_e {
-		Vrms = LEV_VRMS = 0
-		Vpp = LEV_VPP
-		dBm = LEV_DBM
+		Vrms | vrms = LEV_VRMS = 0
+		Vpp | vpp = LEV_VPP
+		dBm | dbm = LEV_DBM
 	}
 
         LEAF save_config WORD {

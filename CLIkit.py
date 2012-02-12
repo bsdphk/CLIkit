@@ -1661,8 +1661,13 @@ def parse_c_enum(tl, fc, fh):
 	l = list()
 	while tl[0] != "}":
 		id = tl.pop(0)
+		alias = list()
 		lbl = None
 		num = None
+		while tl[0] == "|":
+			assert tl.pop(0) == "|"
+			alias.append(tl.pop(0))
+
 		while tl[0] == "=":
 			assert tl.pop(0) == "="
 			if tl[0][0].isdigit():
@@ -1675,7 +1680,7 @@ def parse_c_enum(tl, fc, fh):
 				lbl = tl.pop(0)
 		if lbl == None:
 			lbl = id
-		l.append((id, lbl, num))
+		l.append((id, lbl, num, alias))
 	assert tl.pop(0) == "}"
 
 	v = vtype_c_enum(nm)
@@ -1701,6 +1706,11 @@ def parse_c_enum(tl, fc, fh):
 		fc.write("\t\t*d = %s;\n" % i[1])
 		fc.write("\t\treturn(0);\n")
 		fc.write("\t}\n")
+		for j in i[3]:
+			fc.write('\tif (!strcmp(s, "%s")) {\n' % j)
+			fc.write("\t\t*d = %s;\n" % i[1])
+			fc.write("\t\treturn(0);\n")
+			fc.write("\t}\n")
 	fc.write("\treturn (-1);\n")
 	fc.write("}\n")
 
