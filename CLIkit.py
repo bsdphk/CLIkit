@@ -319,13 +319,10 @@ void *CLIkit_Get_Instance(const struct clikit_context *);
  */
 
 int clikit_int_match(struct clikit_context *, const char *);
-int clikit_int_help(const struct clikit_context *, const char *);
 int clikit_int_tophelp(const struct clikit_context *, const char *,
     const char *);
 int clikit_int_eol(const struct clikit_context *);
 int clikit_int_recurse(const struct clikit_context *);
-// void clikit_int_push_instance(struct clikit_context *);
-// void clikit_int_pop_instance(struct clikit_context *);
 int clikit_int_unknown(struct clikit_context *);
 void clikit_int_next(struct clikit_context *);
 const char *clikit_int_input(const struct clikit_context *);
@@ -865,11 +862,14 @@ clikit_int_stdinstance(struct clikit_context *cc, clikit_recurse_f *rf,
 		if (CLIkit_Printf(cc, "%*s%-*s %s\\n",
 		    cc->help * 2, "", 30 - cc->help * 2, h1, h2))
 			return (1);
-		cc->help++;
 		cc->cur_instance = NULL;
-		(void)rf(cc);
-		cc->help--;
-		return (1);
+		cc->help++;
+		if (clikit_int_eol(cc)) {
+			(void)rf(cc);
+			cc->help--;
+			return (1);
+		}
+		return (0);
 	}
 
 	/* Recursion at end of command:  Walk through all instances */
@@ -966,7 +966,7 @@ clikit_int_tophelp(const struct clikit_context *cc, const char *s1,
 {
 
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
-	if (cc->help == 0)
+	if (!(cc->prefix & 1))
 		return (0);
 	(void)CLIkit_Printf(cc, "%*s%-*s %s\\n",
 	    cc->help * 2, "",
@@ -1174,19 +1174,6 @@ CLIkit_Input(struct clikit_context *cc, const char *s)
 }
 
 /*********************************************************************/
-
-int
-clikit_int_help(const struct clikit_context *cc, const char *str)
-{
-
-	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
-	if (*cc->p == 0 && (cc->prefix & 1)) {
-		(void)CLIkit_Puts(cc, str);
-		(void)CLIkit_Puts(cc, "\\n");
-		return (1);
-	}
-	return (0);
-}
 
 int
 clikit_int_match(struct clikit_context *cc, const char *str)
@@ -1498,6 +1485,7 @@ def parse_leaf(tl, fc, fh, toplev):
 	for i in tal:
 		fc.write("\t%s arg_%d = (%s)0;\n" % (i.citype(), n, i.citype()))
 		n += 1
+	fc.write('\tint retval = 0;\n')
 	fc.write("\n")	
 
 	# XXX: Enums look ugly
@@ -1512,25 +1500,20 @@ def parse_leaf(tl, fc, fh, toplev):
 		n += 1
 	mcall += ");"
 
+	fc.write('\tif (!clikit_int_eol(cc)) {\n')
+	fc.write('\t\tif (clikit_int_match(cc, "%s"))\n' % nm)
+	fc.write('\t\t\treturn(0);\n')
+	fc.write('\t\tretval = 1;\n')
+	fc.write('\t}\n')
+
 	fc.write('\tif (clikit_int_tophelp(cc, "%s%s",\n\t    "%s"))\n' %
 		(nm, s, kv['DESC']))
-	fc.write('\t\treturn(0);\n')
+	fc.write('\t\treturn(retval);\n')
 
 	fc.write('\tif (clikit_int_eol(cc) && clikit_int_recurse(cc)) {\n')
 	fc.write('\t\t' + mcall + "\n")
 	fc.write('\t\treturn(0);\n')
 	fc.write('\t}\n')
-
-	fc.write('\tif (clikit_int_match(cc, "%s"))\n\t\treturn(0);\n' % nm)
-
-	fc.write('\tif (clikit_int_eol(cc) && clikit_int_recurse(cc)) {\n')
-	fc.write('\t\t' + mcall + "\n")
-	fc.write('\t\treturn(0);\n')
-	fc.write('\t}\n')
-
-	fc.write('\tif (clikit_int_help(cc, \n')
-	fc.write('\t    "%s: %s"))\n' % (nm, kv['DESC']))
-	fc.write('\t\treturn(1);\n')
 
 	n = 0
 	for i in tal:
@@ -1675,17 +1658,13 @@ def parse_instance(tl, fc, fh, toplev):
 		s += " <" + i.name + ">"
 	s += ":"
 
+	fc.write('\tif (!clikit_int_eol(cc) && clikit_int_match(cc, "%s"))\n'
+	    % nm)
+	fc.write('\t\treturn(0);\n\n')
+
 	fc.write('\tretval = clikit_int_stdinstance(cc, recurse_%d,\n' % nr)
 	fc.write('\t    \"%s\", \"%s\");\n' % (s,kv['DESC']))
 	fc.write('\tif (retval)\n\t\treturn (retval);\n\n')
-
-	fc.write('\tif (clikit_int_match(cc, "%s"))\n\t\treturn(0);\n\n' % nm)
-
-	fc.write('\tif (clikit_int_eol(cc)) {\n')
-	fc.write('\t\tretval = clikit_int_stdinstance(cc, recurse_%d,\n' % nr)
-	fc.write('\t\t    \"%s\", \"%s\");\n' % (s,kv['DESC']))
-	fc.write('\t\tif (retval)\n\t\t\treturn (retval);\n\n')
-	fc.write('\t}\n')
 
 	n = 0
 	for i in tal:
