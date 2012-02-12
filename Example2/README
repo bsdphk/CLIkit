@@ -1,0 +1,16 @@
+This is a slighly more involved, but less portable example:
+
+In Main/ we build the central bit of a program which can load
+modules which extends its functionality
+
+In Dummy/ is one such incredibly unfunctinal module.
+
+I have used the FreeBSD Makefile-infrastructure here for expediency.
+For reasons totally beyond reason, there is no standardized portable
+way to build a loadable object.
+
+On FreeBSD, do this:
+
+	make depend
+	make
+	( cd Main ; ./MTPns )
