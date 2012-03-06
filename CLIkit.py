@@ -307,9 +307,15 @@ void CLIkit_Input(struct clikit_context *, const char *);
  * Functions to call from the command implementation functions
  */
 
-int CLIkit_Error(struct clikit_context *, int error, const char *fmt, ...);
+#ifndef __printflike
+#define __printflike(a, b)
+#endif
+
+int CLIkit_Error(struct clikit_context *, int error, const char *fmt, ...) \
+    __printflike(3,4);
 int CLIkit_Puts(const struct clikit_context *, const char *str);
-int CLIkit_Printf(const struct clikit_context *, const char *fmt, ...);
+int CLIkit_Printf(const struct clikit_context *, const char *fmt, ...) \
+    __printflike(2, 3);
 unsigned CLIkit_Get_Prefix(const struct clikit_context *);
 void *CLIkit_Get_Instance(const struct clikit_context *);
 
