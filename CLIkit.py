@@ -144,6 +144,7 @@ def parse_enum(tl, fc, fh):
 	fc.write("\nstatic const char *%s[] = {\n" % id)
 	for i in l:
 		fc.write("\t\"%s\",\n" % i)
+	fc.write("\tNULL\n")
 	fc.write("};\n")
 	t = vtype_enum(id, id)
 	return id
