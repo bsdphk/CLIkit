@@ -53,14 +53,18 @@ import os
 vtypes = dict()
 
 class vtype(object):
-	def __init__(self, name, citype, cetype = None):
+	def __init__(self, name, citype, cetype = None, token = None):
 		self.name = name;
+		if token == None:
+			self.token = name
+		else:
+			self.token = token
 		self.ci_type = citype
 		if cetype == None:
 			cetype = citype
 		self.ce_type = cetype
 		self.func = "clikit_int_arg_" + self.name
-		vtypes[name] = self
+		vtypes[self.token] = self
 
 	def citype(self):
 		return self.ci_type
@@ -111,6 +115,7 @@ vtype("UINT", "unsigned")
 vtype("INT", "int")
 vtype("WORD", "char *", "const char *")
 vtype("STRING", "char *", "const char *")
+vtype("ARGV", "char **", "char * const *", "...")
 
 #######################################################################
 #
@@ -484,6 +489,8 @@ struct clikit_context {
 	unsigned			prefix;
 	int				help;
 	int				recurse;
+	char				**argv;
+	int				nargv;
 
 	int				error;
 
@@ -718,6 +725,7 @@ CLIkit_Destroy_Context(struct clikit_context *cc)
 	ck = cc->ck;
 	assert(ck != NULL && ck->magic == CLIKIT_MAGIC);
 	CKL_REMOVE(cc, list);
+	free(cc->argv);
 	(void)memset(cc, 0, sizeof *cc);
 	free(cc);
 	return (0);
@@ -1374,6 +1382,38 @@ clikit_int_arg_enum(struct clikit_context *cc, char **arg,
 	for(d = wlist; *d != NULL; d++)
 		(void)CLIkit_Printf(cc, "\\t%s\\n", *d);
 	return (-1);
+}
+
+int
+clikit_int_arg_ARGV(struct clikit_context *cc, char ***arg)
+{
+	int n;
+
+	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
+	assert(arg != NULL);
+	if (!*cc->p) {
+		(void)CLIkit_Error(cc, -1, "Missing arguments\\n");
+		return (-1);
+	}
+	n = 0;
+	while (*cc->p) {
+		if (cc->nargv < n + 2) {
+			cc->argv = realloc(cc->argv,
+			    sizeof(*cc->argv) * (n + 8L));
+			assert(cc->argv != NULL);	// XXX
+			cc->nargv = n + 8;
+		}
+		cc->argv[n++] = cc->p;
+		clikit_int_next(cc);
+	}
+	if (cc->nargv < n + 2) {
+		cc->argv = realloc(cc->argv, sizeof(*cc->argv) * (n + 8L));
+		assert(cc->argv != NULL);	// XXX
+		cc->nargv = n + 8;
+	}
+	cc->argv[n++] = NULL;
+	*arg = cc->argv;
+	return (0);
 }
 
 
