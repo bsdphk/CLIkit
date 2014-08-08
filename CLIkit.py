@@ -1,6 +1,6 @@
 #!/usr/local/bin/python
 #
-# Copyright 2012 Poul-Henning Kamp <phk@FreeBSD.org> 
+# Copyright 2012 Poul-Henning Kamp <phk@FreeBSD.org>
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -53,8 +53,8 @@ import os
 vtypes = dict()
 
 class vtype(object):
-	def __init__(self, name, citype, cetype = None, token = None):
-		self.name = name;
+	def __init__(self, name, citype, cetype=None, token=None):
+		self.name = name
 		if token == None:
 			self.token = name
 		else:
@@ -135,7 +135,7 @@ class vtype_enum(vtype):
 		return s
 
 vtype_enum("ENUM", None)
-	
+
 
 def parse_enum(tl, fc, fh):
 	id = "enum_%d" % len(tl)
@@ -153,12 +153,12 @@ def parse_enum(tl, fc, fh):
 	fc.write("};\n")
 	t = vtype_enum(id, id)
 	return id
-	
+
 
 #######################################################################
 #
 
-def usage(txt = None):
+def usage(txt=None):
 	if txt != None:
 		sys.stderr.write("Error: " + txt + "\n")
 	sys.stderr.write("""Usage:
@@ -175,7 +175,7 @@ def usage(txt = None):
 
 def do_copyright(fd):
 	fd.write("""/*
- * Copyright 2012 Poul-Henning Kamp <phk@FreeBSD.org> 
+ * Copyright 2012 Poul-Henning Kamp <phk@FreeBSD.org>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -353,7 +353,7 @@ void clikit_int_addinstance(struct clikit_context *, const void *,
 void *clikit_int_del_cur_instance(struct clikit_context *);
 
 """)
-	for i,j in vtypes.iteritems():
+	for i, j in vtypes.iteritems():
 		fo.write(j.conv_proto() + ";\n")
 	fo.write("""
 
@@ -534,12 +534,12 @@ CLIkit_Destroy(struct clikit *ck)
 		assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
 		retval |= CLIkit_Destroy_Context(cc);
 	}
-		
+
 	CKL_FOREACH_SAFE(cb, &ck->branches, list, cb2) {
 		assert(cb != NULL && cb->magic == CLIKIT_BRANCH_MAGIC);
 		retval |= CLIkit_Del_Tree(ck, cb->func, cb->root);
 	}
-		
+
 	CKL_FOREACH_SAFE(cp, &ck->prefixes, list, cp2) {
 		assert(cp != NULL && cp->magic == CLIKIT_PREFIX_MAGIC);
 		retval |= CLIkit_Del_Prefix(ck, cp->pfx);
@@ -615,7 +615,7 @@ int
 CLIkit_Del_Prefix(const struct clikit *ck, const char *pfx)
 {
 	struct clikit_prefix *cp;
-	
+
 	assert(ck != NULL && ck->magic == CLIKIT_MAGIC);
 	CKL_FOREACH(cp, &ck->prefixes, list) {
 		assert(cp != NULL && cp->magic == CLIKIT_PREFIX_MAGIC);
@@ -667,7 +667,7 @@ CLIkit_Del_Tree(const struct clikit *ck, clikit_match_f *func,
     const char *root)
 {
 	struct clikit_branch *cb;
-	
+
 	assert(ck != NULL && ck->magic == CLIKIT_MAGIC);
 	CKL_FOREACH(cb, &ck->branches, list) {
 		assert(cb != NULL && cb->magic == CLIKIT_BRANCH_MAGIC);
@@ -677,7 +677,7 @@ CLIkit_Del_Tree(const struct clikit *ck, clikit_match_f *func,
 			;
 		else if (cb->root == NULL || root == NULL)
 			continue;
-		else if (strcmp(cb->root, root)) 
+		else if (strcmp(cb->root, root))
 			continue;
 
 		CKL_REMOVE(cb, list);
@@ -720,7 +720,7 @@ int
 CLIkit_Destroy_Context(struct clikit_context *cc)
 {
 	struct clikit *ck;
-	
+
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
 	ck = cc->ck;
 	assert(ck != NULL && ck->magic == CLIKIT_MAGIC);
@@ -1010,7 +1010,7 @@ clikit_top_help(struct clikit_context *cc)
 			cc->help++;
 		}
 		(void)cb->func(cc);
-		if (cb->root) 
+		if (cb->root)
 			cc->help--;
 	}
 }
@@ -1025,7 +1025,7 @@ clikit_int_input(const struct clikit_context *cc)
 {
 	assert(cc != NULL && cc->magic == CLIKIT_CONTEXT_MAGIC);
 	return (cc->p);
-} 
+}
 
 void
 clikit_int_next(struct clikit_context *cc)
@@ -1065,7 +1065,7 @@ clikit_exec(struct clikit_context *cc)
 
 	/* Terminate the list */
 	clikit_add_char(cc, 0);
-	
+
 	cc->p = cc->b;
 	cc->help = 0;
 	cc->prefix = 0;
@@ -1135,7 +1135,7 @@ clikit_in_char(struct clikit_context *cc, int ch)
 			cc->st = sComment;
 		else if (isspace(ch) && !isblank(ch))
 			clikit_complete(cc);
-		else if (isspace(ch)) 
+		else if (isspace(ch))
 			cc->st = sIdle;
 		else if (ch == '"')
 			cc->st = sQuoted;
@@ -1150,7 +1150,7 @@ clikit_in_char(struct clikit_context *cc, int ch)
 			cc->st = sIdle;
 			if (!isblank(ch))
 				clikit_complete(cc);
-		} else 
+		} else
 			clikit_add_char(cc, ch);
 		break;
 	case sQuoted:
@@ -1182,7 +1182,7 @@ clikit_in_char(struct clikit_context *cc, int ch)
 		break;
 	default:
 		break;
-	}  
+	}
 }
 
 /*********************************************************************/
@@ -1522,7 +1522,7 @@ def parse_leaf(tl, fc, fh, toplev):
 
 	tal = parse_arglist(tl, fc, fh)
 
-	kv,static,children = parse_brace(tl, fc, fh, toplev,
+	kv, static, children = parse_brace(tl, fc, fh, toplev,
 	    nr, "LEAF(%s)" % nm,
 	    ("DESC", "FUNC"), True)
 
@@ -1541,7 +1541,7 @@ def parse_leaf(tl, fc, fh, toplev):
 		fc.write("\t%s arg_%d = (%s)0;\n" % (i.citype(), n, i.citype()))
 		n += 1
 	fc.write('\tint retval = 0;\n')
-	fc.write("\n")	
+	fc.write("\n")
 
 	# XXX: Enums look ugly
 	s = ''
@@ -1582,12 +1582,12 @@ def parse_leaf(tl, fc, fh, toplev):
 
 	if static != "":
 		return kv['NAME']
-	
+
 def parse_branch(tl, fc, fh, toplev):
 	assert tl.pop(0) == "BRANCH"
 	nr = len(tl)
 
-	kv,static,children = parse_brace(tl, fc, fh, toplev,
+	kv, static, children = parse_brace(tl, fc, fh, toplev,
 	    nr, "BRANCH(@%d)" % nr,
 	    (), False)
 
@@ -1601,8 +1601,8 @@ def parse_branch(tl, fc, fh, toplev):
 		fc.write("if ((retval = %s(cc)) != 0) /*lint !e838*/\n" % i)
 		fc.write("\t\treturn (retval);\n")
 	fc.write("\treturn (retval);\n")
-	fc.write("}\n");
-	fc.write("\n");
+	fc.write("}\n")
+	fc.write("\n")
 
 	if static != "":
 		return kv['NAME']
@@ -1615,7 +1615,7 @@ def parse_instance(tl, fc, fh, toplev):
 
 	tal = parse_arglist(tl, fc, fh)
 
-	kv,static,children = parse_brace(tl, fc, fh, toplev,
+	kv, static, children = parse_brace(tl, fc, fh, toplev,
 	    nr, "INSTANCE(%s)" % nm,
 	    ("DESC", "FUNC"), False)
 
@@ -1627,7 +1627,7 @@ def parse_instance(tl, fc, fh, toplev):
 	fc.write("\tstruct clikit_instance	instance;\n")
 	n = 0
 	for i in tal:
-		fc.write("\t%s\t\targ_%d;\n" % (i.citype(), n));
+		fc.write("\t%s\t\targ_%d;\n" % (i.citype(), n))
 		n += 1
 	fc.write("};\n\n")
 
@@ -1677,7 +1677,7 @@ def parse_instance(tl, fc, fh, toplev):
 	fc.write("\telse\n")
 	fc.write("\t\tretval = clikit_int_unknown(cc);\n")
 	fc.write("\treturn (retval);\n")
-	fc.write("}\n");
+	fc.write("}\n")
 
 	###############################################################
 	# Emit clone function
@@ -1702,7 +1702,7 @@ def parse_instance(tl, fc, fh, toplev):
 	fc.write("delete_%d(struct clikit_context *cc, void *arg)\n" % nr)
 	fc.write("{\n")
 	fc.write("\tstruct %s *target = arg;\n" % ivs)
-	fc.write("\tif (%s)\n" % icall) 
+	fc.write("\tif (%s)\n" % icall)
 	fc.write("\t\treturn (-1);\n")
 	fc.write("\tif (target->instance.ptr == 0) {\n")
 	fc.write("\t\ttarget = clikit_int_del_cur_instance(cc);\n")
@@ -1711,7 +1711,7 @@ def parse_instance(tl, fc, fh, toplev):
 		s = i.free("target->arg_%d" % n)
 		if s != None:
 			fc.write("\t\t%s;\n" % s)
-		n += 1	
+		n += 1
 	fc.write("\t\tfree(target);\n")
 	fc.write("\t\treturn (1);\n")
 	fc.write("\t\t}\n")
@@ -1724,7 +1724,7 @@ def parse_instance(tl, fc, fh, toplev):
 	if not kv['FUNC'] in prototyped:
 		fh.write("int %s(struct clikit_context *" % kv["FUNC"])
 		for i in tal:
-			fh.write(", " + i.cetype());
+			fh.write(", " + i.cetype())
 		fh.write(", void **);\n")
 		prototyped[kv['FUNC']] = True
 
@@ -1736,7 +1736,7 @@ def parse_instance(tl, fc, fh, toplev):
 	fc.write('{\n')
 	fc.write('\tint retval;\n')
 	fc.write('\tstruct %s ivs, *target = &ivs;\n' % ivs)
-	fc.write("\n")	
+	fc.write("\n")
 
 	s = nm
 	for i in tal:
@@ -1748,8 +1748,8 @@ def parse_instance(tl, fc, fh, toplev):
 	fc.write('\t\treturn(0);\n\n')
 
 	fc.write('\tretval = clikit_int_stdinstance(')
-	fc.write('cc, recurse_%d, delete_%d,\n' % (nr,nr))
-	fc.write('\t    \"%s\", \"%s\");\n' % (s,kv['DESC']))
+	fc.write('cc, recurse_%d, delete_%d,\n' % (nr, nr))
+	fc.write('\t    \"%s\", \"%s\");\n' % (s, kv['DESC']))
 	fc.write('\tif (retval)\n\t\treturn (retval);\n\n')
 
 	n = 0
@@ -1782,7 +1782,7 @@ def parse_instance(tl, fc, fh, toplev):
 	fc.write("\tassert(ivs.instance.ptr != 0);\n")
 
 	fc.write("\treturn (recurse_%d(cc));\n" % nr)
-	fc.write("}\n");
+	fc.write("}\n")
 
 	if static != "":
 		return kv['NAME']
@@ -1845,7 +1845,7 @@ def parse_c_enum(tl, fc, fh):
 			fh.write(" = %s" % i[2])
 	fh.write("\n};\n")
 
-	fh.write("int str2%s(const char *, enum %s *);\n" % (nm,nm))
+	fh.write("int str2%s(const char *, enum %s *);\n" % (nm, nm))
 	fc.write("\nint\nstr2%s(const char *s, enum %s *d)\n" % (nm, nm))
 	fc.write("{\n")
 	for i in l:
@@ -1861,7 +1861,7 @@ def parse_c_enum(tl, fc, fh):
 	fc.write("\treturn (-1);\n")
 	fc.write("}\n")
 
-	fh.write("int %s2str(enum %s, const char **);\n" % (nm,nm))
+	fh.write("int %s2str(enum %s, const char **);\n" % (nm, nm))
 	fc.write("\nint\n%s2str(enum %s s,  const char **d)\n" % (nm, nm))
 	fc.write("{\n")
 	fc.write("\tswitch(s) {\n")
@@ -1883,7 +1883,7 @@ def parse_c_enum(tl, fc, fh):
 	fc.write("\tassert(arg != NULL);\n")
 	fc.write("\tif (!input) {\n")
 	fc.write('\t\t(void)CLIkit_Error(cc, -1, "Missing %s argument\\n");\n'
-	    % nm);
+	    % nm)
 	fc.write("\t\treturn (-1);\n")
 	fc.write("\t}\n")
 	fc.write("\tif (!str2%s(input, arg)) {\n" % nm)
@@ -1895,8 +1895,8 @@ def parse_c_enum(tl, fc, fh):
 	# XXX: list valid choices
 	fc.write("\treturn (-1);\n")
 	fc.write("}\n")
-	
-	
+
+
 
 #######################################################################
 
@@ -1956,7 +1956,7 @@ def do_tree(argv):
 	if len(argv) != 1:
 		usage("XXX: options not yet implemented")
 	fname = os.path.splitext(argv[0])
-	bname = os.path.basename(fname[0]) 
+	bname = os.path.basename(fname[0])
 
 	fc = open(bname + ".c", "w")
 	do_copyright(fc)
@@ -1983,8 +1983,8 @@ if __name__ == "__main__":
 	if len(sys.argv) < 2:
 		usage("Need at least one argument")
 	elif sys.argv[1] == "--code":
-		do_code(sys.argv [2:])
+		do_code(sys.argv[2:])
 	elif sys.argv[1] == "--tree":
-		do_tree(sys.argv [2:])
+		do_tree(sys.argv[2:])
 	else:
 		usage("Argument error")
